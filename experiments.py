@@ -17,11 +17,7 @@ def prepare_all():
 
 
 def prepare_dataset():
-    """Loading the dataset bioasq and making three dictionaries
-       questions : {id: (embedding, relevant passages)}
-       answers : {id: (embedding, relevant passages)}
-       corpus : {id: embedding}
-    """
+   # Loading the dataset and calculating the embeddings and then save them
 
     # Loading data from the dataset bioasq
     bioasq, bioasq_corpus = dt.read_dataset_bioasq("Datasets/rag-mini-bioasq/")
@@ -40,6 +36,7 @@ def prepare_for_clustering(data, name):
 
 
 def prepare_samples():
+    # Preparing samples for other experiments
     questions, answers, corpus = dt.load_data()
 
     sample_size = 15
@@ -74,35 +71,36 @@ def baseline_search(query_ids, k):
        dcg_scores.append(dcg)
     print(f"Avg Recall@k score: {sum(recallk_scores)/len(recallk_scores)} | MRR score: {ev.MRR_score(rr_scores)} | Avg DCG@K: {sum(dcg_scores)/len(dcg_scores)}")
 def baseline(query_id, k):
+   # Given an list of ids using cosine similarity score find the top k most similar passages and then calcualting the metrics
 
+   # Loading data
    q, a, c = dt.load_data()
    query = q[query_id]
    query_emb = query[0].reshape(1, -1)
    query_correct_results = query[1]
    pq = PriorityQueue()
 
+   # For every passage calculating the cosine similarity score
    for document in c.keys():
        document_emb = c[document].reshape(1, -1)
        sim = cosine_similarity(query_emb, document_emb)
        pq.put((-float(sim), query_id, document))
    i = 0
    pred_results = []
+   # Taking from the priority queue the passages with the highest score
    while i < k:
        neg_sim, query_id, document = pq.get()
        #print(f"query: {query_id} | doc: {document} | sim: {-neg_sim:.2f}")
        pred_results.append(document)
        i+=1
 
-
+   # Evaluating the results
    recallk = ev.recallk_score(pred_results, query_correct_results, k)
    rr = ev.RR_score(pred_results, query_correct_results)
-   dcg = ev.DCGk_score(pred_results, query_correct_results)
+   dcg = ev.DCGk_score(pred_results, query_correct_results, k)
    return recallk, rr, dcg
 def threshold_graph(sampled_items):
-    """
-    Data loading -> make embeddings -> make graph ->
-    retrieval -> evaluation -> save results
-    """
+    # Building a threshold graph
     gc.build_thershold_graph(sampled_items)
 
     #G = dt.load_graph()
@@ -111,15 +109,17 @@ def threshold_graph(sampled_items):
     return
 
 def knn_Graph(sampled_items):
+    # Building a graph using knn
     gc.build_knn_graph(sampled_items)
 
     return
 
 
 def mutual_knn(sampled_items):
+    # Building a graph using mutual knn
     gc.build_mutual_knn_graph(sampled_items)
     return
 
 def cluster_graph(sampled_items, threshold_distance):
-
+    # Building a graph using clustering
     gc.build_clustering_graph(sampled_items, threshold_distance)

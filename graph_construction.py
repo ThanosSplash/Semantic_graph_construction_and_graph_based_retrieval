@@ -12,32 +12,16 @@ from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 import clustering as cl
 
-def pipeline(data, scaler):
-    pca = PCA()
-    data_scaled = scaler.fit_transform(data)
-    pca.fit(data_scaled)
-
-    variance = pca.explained_variance_ratio_
-    cumulative_variance = np.cumsum(variance)
-    threshold_variance = 0.85
-    n_components = np.argmax(cumulative_variance >= threshold_variance) + 1
-
-    pca_plot = PCA(n_components=n_components)
-    data_pca = pca_plot.fit_transform(data_scaled)
-    return data_pca
 
 
 
 def build_thershold_graph(corpus):
-    """
-    Building a
-    :param corpus:
-    :return:
-    """
+    # Building a graph where the edges are formed if two passages (nodes) have cosine score higher than a thershold
     G = nx.Graph()
     threshold = 0.2
     for id in corpus:
         G.add_node(id)
+    # Constructing the graph
     for (id1, emb1), (id2, emb2) in combinations(corpus.items(), 2):
         emb1 = emb1.reshape(1, -1)
         emb2 = emb2.reshape(1, -1)
@@ -57,6 +41,7 @@ def build_thershold_graph(corpus):
 
 
 def build_knn_graph(corpus):
+    # Building a graph where the edges are formed using the knn algorithm
     G = nx.Graph()
     k = 5
 
@@ -66,12 +51,12 @@ def build_knn_graph(corpus):
     embeddings = np.array(list(corpus.values()))
     # scaler = StandardScaler()
     scaler = MinMaxScaler()
-    data = pipeline(embeddings, scaler)
+    data = cl.pipeline(embeddings, scaler)
     nn = NearestNeighbors(n_neighbors=k + 1, metric="cosine")
     nn.fit(data)
     distances, indices = nn.kneighbors(data)
 
-
+    # Constructing the graph
     for i, neighbors in enumerate(indices):
         node_id = ids[i]
         for j, nearest in enumerate(neighbors):
@@ -91,6 +76,7 @@ def build_knn_graph(corpus):
 
 
 def build_mutual_knn_graph(corpus):
+    # Building a graph where the edges are formed using the mutual knn algorithm
     G = nx.Graph()
     k = 5
     for id in corpus:
@@ -100,11 +86,11 @@ def build_mutual_knn_graph(corpus):
     # scaler = StandardScaler()
     scaler = MinMaxScaler()
     embeddings = np.array(list(corpus.values()))
-    data = pipeline(embeddings, scaler)
+    data = cl.pipeline(embeddings, scaler)
     nn = NearestNeighbors(n_neighbors=k + 1, metric="cosine")
     nn.fit(data)
     distances, indices = nn.kneighbors(data)
-
+    # Constructing the graph
     d = {}
     for i, neighbors in enumerate(indices):
         node_id = ids[i]
@@ -122,17 +108,19 @@ def build_mutual_knn_graph(corpus):
 
 
 def build_clustering_graph(data, threshold_distance):
-
-    unique_clusters, clustering_labels, ids = cl.kmeans_pipeline(data, threshold_distance)
+    # Building multiples graphs using clustering
+    unique_clusters, clustering_labels, ids = cl.kmeans(data, threshold_distance)
+    print(unique_clusters)
 
     G = nx.Graph()
     for id in data:
         G.add_node(id)
+    # Constructing the graph
     for cluster_id in range(len(unique_clusters)):
         cluster_nodes = [ids[i] for i, label in enumerate(clustering_labels) if label == cluster_id]
 
         for i, node_a in enumerate(cluster_nodes):
-            for node_b in cluster_nodes[i + 1:]:  # avoid duplicate edges
+            for node_b in cluster_nodes[i + 1:]:
                 G.add_edge(node_a, node_b)
 
     plot_graph(G, "Kmeans")
@@ -168,10 +156,7 @@ def plot_graph(G, name):
 
 
 def plot_subgraph(G, nodes):
-    """
-    nodes: list of node names/ids you want to plot
-    Example: plot_subgraph(G, ['node1', 'node2', 'node3'])
-    """
+
     S = G.subgraph(nodes)
 
     # Sanitize edge weights
