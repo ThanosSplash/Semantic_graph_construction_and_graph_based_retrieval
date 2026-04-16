@@ -45,7 +45,7 @@ def kmeans(data, threshold_distance):
     clustering = KMeans(n_clusters=len(unique_clusters), init=cluster_centers, n_init=1, random_state=42)
     clustering_labels = clustering.fit_predict(data_pca)
 
-    return unique_clusters, clustering_labels, ids
+    return unique_clusters, clustering_labels, ids, embeddings
 
 
 def dendrogram(data, name):

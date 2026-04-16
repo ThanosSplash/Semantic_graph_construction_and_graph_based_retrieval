@@ -3,7 +3,7 @@ import data_loading as dt
 import graph_construction as gc
 
 # Baseling Search
-ex.baseline_search([1,2,100], 3)
+#ex.baseline_search([1,2,100], 3)
 
 
 # mutual KNN graph

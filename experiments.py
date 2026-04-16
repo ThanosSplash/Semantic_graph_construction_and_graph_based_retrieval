@@ -101,7 +101,7 @@ def baseline(query_id, k):
    return recallk, rr, dcg
 def threshold_graph(sampled_items):
     # Building a threshold graph
-    gc.build_thershold_graph(sampled_items)
+    gc.build_threshold_graph(sampled_items)
 
     #G = dt.load_graph()
     #nodes_to_plot = list(G.nodes())[:100]
