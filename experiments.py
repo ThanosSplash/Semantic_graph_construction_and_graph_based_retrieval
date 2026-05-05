@@ -1,6 +1,7 @@
 import embeddings as emb
 import data_loading as dt
 import graph_construction as gc
+import retrieval as rt
 from sklearn.cluster import AgglomerativeClustering, KMeans
 import random
 from sklearn.decomposition import PCA
@@ -11,8 +12,6 @@ import evaluation as ev
 import clustering
 def prepare_all():
     prepare_dataset()
-    prepare_samples()
-    prepare_for_clustering()
     return
 
 
@@ -30,96 +29,83 @@ def prepare_dataset():
     dt.save_data(questions, answers, corpus)
 
 
-def prepare_for_clustering(data, name):
-    clustering.dendrogram(data, name)
+
+def baseline_search(query_ids, k, results_file):
+    # Function that retrieves for each query the top-k most similar data and evaluates the results
+    rr_scores = []
+    recallk_scores =[]
+    ndcg_scores = []
+    avg_precisions = []
+    for query_id in query_ids:
+       # For each query calculates the top-k
+       predictions, correct, _ = rt.top_k(query_id, k)
+       # Evaluating the results
+       recallk_scores.append(ev.recallk_score(predictions, correct, k))
+       rr_scores.append(ev.RR_score(predictions, correct))
+       ndcg_scores.append(ev.nDCGk_score(predictions, correct, k))
+       avg_precisions.append(ev.avg_precision(predictions, correct, k))
+    # Printing and saving the results
+    recallk = sum(recallk_scores) / len(recallk_scores)
+    mrr = ev.MRR_score(rr_scores)
+    ndcg = sum(ndcg_scores) / len(ndcg_scores)
+    mapk = sum(avg_precisions) / len(avg_precisions)
+    print(
+        f"Avg Recall@k score: {recallk:.4f} | MRR score: {mrr:.4f} "
+        f"| Avg DCG@K: {ndcg:.4f} |  | MAP@K score: {mapk :.4f}")
+    dt.save_result("Top-"+str(k), recallk, mrr, ndcg, mapk, k, results_file)
+def personalised_pagerank_search(query_ids, graph, graph_type, k, results_file):
+    # Function that retrieves data from a graph using personalised pagerank and evaluates the results
+    rr_scores = []
+    recallk_scores = []
+    ndcg_scores = []
+    avg_precisions = []
+    for query_id in query_ids:
+        # For each query calculates the top-k
+        imporant_nodes, correct, sims = rt.top_k(query_id, k)
+        # Running personalised pagerank
+        predictions = rt.personalised_pagerank(graph, imporant_nodes, sims, k)
+        # Evaluating the results
+        recallk_scores.append(ev.recallk_score(predictions, correct, k))
+        rr_scores.append(ev.RR_score(predictions, correct))
+        ndcg_scores.append(ev.nDCGk_score(predictions, correct, k))
+        avg_precisions.append(ev.avg_precision(imporant_nodes, correct, k))
+    # Printing and saving the results
+    recallk = sum(recallk_scores) / len(recallk_scores)
+    mrr = ev.MRR_score(rr_scores)
+    ndcg = sum(ndcg_scores) / len(ndcg_scores)
+    mapk = sum(avg_precisions) / len(avg_precisions)
+    print(
+        f"Avg Recall@k score: {recallk:.4f} | MRR score: {mrr:.4f} "
+        f"| Avg DCG@K: {ndcg:.4f} |  | MAP@K score: {mapk :.4f}")
+    dt.save_result(graph_type + " + PPR ", recallk, mrr, ndcg, mapk, k, results_file)
+
     return
 
 
-def prepare_samples():
-    # Preparing samples for other experiments
-    questions, answers, corpus = dt.load_data()
 
-    sample_size = 15
-    sampled_items = random.sample(list(corpus.items()), sample_size)
-    sampled_dict = dict(sampled_items)
-    dt.save_samples(sampled_dict, "15")
-    prepare_for_clustering(sampled_dict, "dendrogram_15.png")
-
-    sample_size = 100
-    sampled_items = random.sample(list(corpus.items()), sample_size)
-    sampled_dict = dict(sampled_items)
-    dt.save_samples(sampled_dict, "100")
-    prepare_for_clustering(sampled_dict, "dendrogram_100.png")
-
-    sample_size = 1000
-    sampled_items = random.sample(list(corpus.items()), sample_size)
-    sampled_dict = dict(sampled_items)
-    dt.save_samples(sampled_dict, "1000")
-    prepare_for_clustering(sampled_dict, "dendrogram_1000.png")
-
-
-
-
-def baseline_search(query_ids, k):
-    rr_scores = []
-    recallk_scores =[]
-    dcg_scores = []
-    for query_id in query_ids:
-       recallk, rr , dcg= baseline(query_id, k)
-       recallk_scores.append(recallk)
-       rr_scores.append(rr)
-       dcg_scores.append(dcg)
-    print(f"Avg Recall@k score: {sum(recallk_scores)/len(recallk_scores)} | MRR score: {ev.MRR_score(rr_scores)} | Avg DCG@K: {sum(dcg_scores)/len(dcg_scores)}")
-def baseline(query_id, k):
-   # Given an list of ids using cosine similarity score find the top k most similar passages and then calcualting the metrics
-
-   # Loading data
-   q, a, c = dt.load_data()
-   query = q[query_id]
-   query_emb = query[0].reshape(1, -1)
-   query_correct_results = query[1]
-   pq = PriorityQueue()
-
-   # For every passage calculating the cosine similarity score
-   for document in c.keys():
-       document_emb = c[document].reshape(1, -1)
-       sim = cosine_similarity(query_emb, document_emb)
-       pq.put((-float(sim), query_id, document))
-   i = 0
-   pred_results = []
-   # Taking from the priority queue the passages with the highest score
-   while i < k:
-       neg_sim, query_id, document = pq.get()
-       #print(f"query: {query_id} | doc: {document} | sim: {-neg_sim:.2f}")
-       pred_results.append(document)
-       i+=1
-
-   # Evaluating the results
-   recallk = ev.recallk_score(pred_results, query_correct_results, k)
-   rr = ev.RR_score(pred_results, query_correct_results)
-   dcg = ev.DCGk_score(pred_results, query_correct_results, k)
-   return recallk, rr, dcg
-def threshold_graph(sampled_items):
+def threshold_graph(sampled_items, threshold_params, preprocess, name, save):
     # Building a threshold graph
-    gc.build_threshold_graph(sampled_items)
+    gc.build_threshold_graph(sampled_items, threshold_params, preprocess, name, save)
 
     #G = dt.load_graph()
     #nodes_to_plot = list(G.nodes())[:100]
     #gc.plot_subgraph(G, nodes_to_plot)
     return
 
-def knn_Graph(sampled_items):
+def knn_Graph(sampled_items, knn_params, preproccess, name, save):
     # Building a graph using knn
-    gc.build_knn_graph(sampled_items)
+    gc.build_knn_graph(sampled_items, knn_params, preproccess, name, save)
 
     return
 
 
-def mutual_knn(sampled_items):
+def mutual_knn(sampled_items, knn_params, preproccess, name, save):
     # Building a graph using mutual knn
-    gc.build_mutual_knn_graph(sampled_items)
+    gc.build_mutual_knn_graph(sampled_items, knn_params, preproccess, name, save)
     return
 
-def cluster_graph(sampled_items, threshold_distance):
+
+def cluster_graph(sampled_items, kmeans_params, threshold_params, agglo_params, preprocess, knn_params, dbscan_params,
+                  algorithm="kmeans"):
     # Building a graph using clustering
-    gc.build_clustering_graph(sampled_items, threshold_distance)
+    gc.build_clustering_graph(sampled_items, kmeans_params, threshold_params, agglo_params, knn_params, dbscan_params, preprocess, algorithm)
