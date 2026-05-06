@@ -52,10 +52,12 @@ def avg_precision(predictions, correct_results, k):
 
 
 
-def nDCGk_score(predictions, correct_results, k):
+def nDCGk_score(predictions, correct_results):
     # Fucntion calculating the DCGk score
     correct_set = set(correct_results)
+
     relevance = np.array([[1 if p in correct_set else 0 for p in predictions]])
+
     ideal = np.array([[1] * min(len(correct_set), len(predictions)) +
                       [0] * (len(predictions) - len(correct_set))])
 
