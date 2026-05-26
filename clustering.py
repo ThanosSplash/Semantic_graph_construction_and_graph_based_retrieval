@@ -81,8 +81,8 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
         unique_clusters = np.unique(clustering_labels)
         # Plotting data and clusters
         data_2d = PCA(n_components=2).fit_transform(data_preprocessed)
-        plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, clustering.cluster_centers_, len(unique_clusters), clustering_labels)
-        return unique_clusters, clustering_labels, ids, embeddings
+        fig = plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, clustering.cluster_centers_, len(unique_clusters), clustering_labels)
+        return unique_clusters, clustering_labels, ids, embeddings, fig
 
     elif pipeline_id == 1:
         # First Agglomerative clustering and after Kmeans
@@ -106,6 +106,8 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
         unique_clusters = np.unique(clusters)
         cluster_centers = np.array([data_preprocessed[clusters == cluster].mean(axis=0) for cluster in unique_clusters])
         # Running kmeans with init the centers calculated by hierarchical clustering
+        agglo_params["n_clusters"] = len(unique_clusters)
+        kmeans_params["n_clusters"] = len(unique_clusters)
         clustering = KMeans(n_clusters=len(unique_clusters), init=cluster_centers, n_init=1,
                             random_state=kmeans_params["random_state"],  max_iter=kmeans_params["max_iter"],
                             tol=kmeans_params["tol"], verbose=kmeans_params["verbose"], copy_x=kmeans_params["copy_x"],
@@ -115,7 +117,7 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
         # Plotting data and clusters
         plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, clustering.cluster_centers_,
                                               len(unique_clusters), clustering_labels)
-        return unique_clusters, clustering_labels, ids, embeddings
+        return unique_clusters, clustering_labels, ids, embeddings, fig
 
     raise ValueError(f"Invalid pipeline_id: {pipeline_id}")
 

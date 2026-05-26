@@ -86,7 +86,7 @@ def plot_cluster_with_silhouette(data, data_2d, centers, n_clusters, clustering_
         fontsize=14,
         fontweight="bold",
     )
-    plt.show()
+    return fig
 
 
 def plot_k_distance_graph(X, k_values):
@@ -142,7 +142,7 @@ def plot_graph(G, name):
 
     plt.title(name + ' Knowledge Graph')
     plt.axis('off')
-    plt.show()
+
 
 
 
@@ -173,19 +173,31 @@ def plot_subgraph(G, nodes):
     plt.show()
 
 
+def convert(obj):
+    if isinstance(obj, np.floating): return float(obj)
+    if isinstance(obj, np.integer):  return int(obj)
+    if isinstance(obj, np.ndarray):  return obj.tolist()
+    if isinstance(obj, dict):        return {k: convert(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)): return [convert(i) for i in obj]
+    return obj
+
 
 def print_graph_stats(graph):
     # Function that prints important metrics for the given graph
-    print(f"Nodes: {graph.number_of_nodes()}, Edges: {graph.number_of_edges()}")
-    print(f"Pagerank Top Nodes: {rt.pagerank(graph, 5)}")
-    print(f"Graph Density: {nx.density(graph):}")
-    print(f"Average degree: {2 * graph.number_of_edges() / graph.number_of_nodes():.4f}")
-    print(f"Number of connected components: {nx.number_connected_components(graph)}")
-    #print([len(c) for c in sorted(nx.connected_components(graph), key=len, reverse=True)][:5])
+    graph_info = {}
+
+    graph_info["Nodes"] = graph.number_of_nodes()
+    graph_info["Edges"] = graph.number_of_edges()
+    graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
+    graph_info["Graph Density"] = nx.density(graph)
+    graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
+    graph_info["Number of connected components"] = nx.number_connected_components(graph)
     communities = community.greedy_modularity_communities(graph)
     community_list = list(communities)
     mod = community.modularity(graph, community_list)
-    print(f"Communities: {len(community_list)}, Modularity: {mod:.4f}")
+    graph_info["Number of communities"] = (len(community_list), mod)
+    graph_info = {k: convert(v) for k, v in graph_info.items()}
+    return graph_info
 
 
 

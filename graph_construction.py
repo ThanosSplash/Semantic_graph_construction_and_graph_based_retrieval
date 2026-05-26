@@ -12,6 +12,8 @@ from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 import clustering as cl
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from datetime import datetime
+import uuid
 
 
 def build_threshold_graph(corpus, threshold_params, preprocess, name, save):
@@ -37,14 +39,19 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, save):
 
     n = len(ids)
     for i in range(n):
-        for j in range(i + 1, n):  # avoid duplicates & self-loops
+        for j in range(i + 1, n):
             sim = sim_matrix[i, j]
             if sim >= threshold:
                 G.add_edge(ids[i], ids[j], weight=sim)
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
-       dt.save_graph(G, name)
+        config = {}
+        config["graph_type"] = "threshold graph"
+        config["threshold"] = threshold_params
+        config["preprocess"] = preprocess
+        dt.save_graph_data(config, name)
+        dt.save_graph(G, name)
 
 
     return G
@@ -70,12 +77,21 @@ def build_knn_graph(corpus, knn_params, preprocess, name, save):
         node_id = ids[i]
         for j, nearest in enumerate(neighbors):
             if i != nearest:
-                sim = 1.0 - distances[i][j]
-                G.add_edge(node_id, ids[nearest], weight=distances[i][j])
+                if knn_params["metric"] == "cosine":
+                    sim = 1.0 - distances[i][j]
+                elif knn_params["metric"] in ("euclidean", "minkowski", "manhattan"):
+                    sim = np.exp(-distances[i][j])
+                G.add_edge(node_id, ids[nearest], weight=sim)
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
 
     if save == True:
+        config = {}
+        config["graph_type"] = "knn graph"
+        config["knn"] = knn_params
+        config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
+
+        dt.save_graph_data(config, name)
         dt.save_graph(G, name)
 
 
@@ -105,23 +121,56 @@ def build_mutual_knn_graph(corpus, knn_params, preprocess, name, save):
     for id in d.keys():
         for i, neighbor in enumerate(d[id][0]):
             if id < neighbor and neighbor in d and id in d[neighbor][0]:
-                sim = 1.0 - d[id][1][i]
+                if knn_params["metric"] == "cosine":
+                    sim = 1.0 - d[id][1][i]
+                elif knn_params["metric"] in ("euclidean", "minkowski", "manhattan"):
+                    sim = np.exp(-d[id][1][i])
                 G.add_edge(ids[id], ids[neighbor], weight=sim)
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
+        config = {}
+        config["graph_type"] = "mutual knn graph"
+        config["knn"] = knn_params
+        config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
+        dt.save_graph_data(config, name)
         dt.save_graph(G, name)
 
     return G
 
 
-def build_clustering_graph(data, kmeans_params, threshold_params, agglo_params, knn_params, dbscan_params, preprocess, algorithm="kmeans"):
+def build_clustering_graph(data, kmeans_params, agglo_params, knn_params, dbscan_params, preprocess, name ,algorithm="kmeans", clustering_result=None, flag=True):
     # Building multiples graphs using clustering
-    if algorithm == "kmeans":
-       unique_clusters, clustering_labels, ids, embeddings = cl.kmeans(data, kmeans_params, agglo_params, scaler=preprocess["scaler"],
+    config = {}
+    if algorithm == "kmeans" and clustering_result == None:
+       unique_clusters, clustering_labels, ids, embeddings, fig = cl.kmeans(data, kmeans_params, agglo_params  ,scaler=preprocess["scaler"],
                                                                     pca=preprocess["pca"], pipeline_id=kmeans_params["pipeline_id"])
-    elif algorithm == "dbscan":
+       clustering_result = {
+           "unique_clusters": unique_clusters,
+           "clustering_labels": clustering_labels,
+           "ids": ids,
+           "embeddings": embeddings,
+           "fig": fig
+       }
+       if flag == True:
+           return clustering_result
+
+
+    elif algorithm == "dbscan" and clustering_result == None:
+
        return
+
+    else:
+        unique_clusters = clustering_result["unique_clusters"]
+        clustering_labels = clustering_result["clustering_labels"]
+        ids = clustering_result["ids"]
+        embeddings = clustering_result["embeddings"]
+        fig = clustering_result["fig"]
+        config = {}
+        config["kmeans"] = kmeans_params
+        config["preprocess"] = (str(preprocess["scaler"]), str(preprocess["pca"]))
+        if kmeans_params["pipeline_id"] == 1:
+            config["agglo_params"] = agglo_params
 
 
     graphs_knn = []
@@ -136,17 +185,27 @@ def build_clustering_graph(data, kmeans_params, threshold_params, agglo_params, 
         }
         graphs_knn.append(build_knn_graph(cluster_nodes, knn_params, preprocess,"", False))
         graphs_mutual_knn.append(build_mutual_knn_graph(cluster_nodes, knn_params, preprocess,"", False))
-        graphs_threshold.append(build_threshold_graph(cluster_nodes,threshold_params, preprocess,"", False))
+
 
     knn_g = nx.compose_all(graphs_knn)
     mutual_knn_g = nx.compose_all(graphs_mutual_knn)
-    threshold_g = nx.compose_all(graphs_threshold)
-    dt.save_graph(knn_g, "Graph_KNN_Kmeans.gpickle")
-    dt.save_graph(mutual_knn_g, "Graph_Mutual_KNN_Kmeans.gpickle")
-    dt.save_graph(threshold_g, "Graph_Threshold.gpickle")
+
+    temp = config.copy()
+    temp["graph_type"] = "clustering knn graph"
+    temp["knn"] = knn_params
+    graph_id = name
+    dt.save_graph_data(temp, graph_id, fig)
+    dt.save_graph(knn_g, graph_id)
+
+    temp = config.copy()
+    temp["graph_type"] = "clustering mutual knn graph"
+    temp["mutual_knn"] = knn_params
+    graph_id = " mutual_" + name
+    dt.save_graph_data(temp, graph_id, fig)
+    dt.save_graph(mutual_knn_g, graph_id)
 
 
-    return
+
 
 
 
