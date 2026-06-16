@@ -1,0 +1,12 @@
+=== ALL_SAMPLES ===
+
+Method                                            Recall      MRR       nDCG      MAP       
+--------------------------------------------------------------------------------------------
+k-steph | k=10 | reranker=cross_encoder | init=5  0.4897      0.7402    0.4369    0.7386    
+k-steph | k=10 | reranker=graph_aware | init=5    0.4658      0.6429    0.3605    0.6697    
+k-steph | k=10 | reranker=BM25 | init=5           0.4648      0.6533    0.3620    0.6751    
+k-steph | k=10 | reranker=BM25 | init=5           0.4648      0.6528    0.3620    0.6750    
+k-steph | k=10 | reranker=graph_aware | init=5    0.4611      0.6243    0.3452    0.6559    
+PPR | k=10 | init=5                               0.3721      0.6418    0.2977    0.6699    
+PPR | k=10 | init=5                               0.3721      0.6477    0.3009    0.6734    
+

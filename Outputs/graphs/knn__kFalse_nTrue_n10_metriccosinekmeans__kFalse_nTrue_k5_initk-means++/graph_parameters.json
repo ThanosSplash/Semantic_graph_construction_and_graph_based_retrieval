@@ -1,0 +1,34 @@
+{
+      "clustering": {
+            "init": "k-means++",
+            "n_init": "auto",
+            "max_iter": 300,
+            "tol": 0.0001,
+            "verbose": 0,
+            "random_state": null,
+            "copy_x": true,
+            "algorithm": "lloyd",
+            "pipeline_id": 0,
+            "n_clusters": 5
+      },
+      "preprocess": [
+            "None",
+            "None"
+      ],
+      "graph_type": "clustering knn graph",
+      "Graph building algorithm params": {
+            "radius": 1.0,
+            "algorithm": "auto",
+            "leaf_size": 30,
+            "p": 2,
+            "metric_params": null,
+            "n_jobs": null,
+            "n_neighbors": 10,
+            "metric": "cosine"
+      },
+      "graph_params": {
+            "Directed": "False",
+            "Weighted": "True"
+      },
+      "Graph building algorithm": "KNN"
+}

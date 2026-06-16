@@ -1,0 +1,21 @@
+{
+    "graph_type": "mutual knn graph",
+    "knn": {
+        "radius": 1.0,
+        "algorithm": "auto",
+        "leaf_size": 30,
+        "p": 2,
+        "metric_params": null,
+        "n_jobs": null,
+        "n_neighbors": 20,
+        "metric": "cosine"
+    },
+    "graph_construction": {
+        "Directed": "False",
+        "Weighted": "True"
+    },
+    "preprocess": [
+        "None",
+        "None"
+    ]
+}

@@ -1,0 +1,3 @@
+{"method": "PPR", "final scores": {"recallk": 0.3531417195851508, "mrr": 0.5969924812030075, "ndcg": 0.2790248614483325, "mapk": 0.6217200066731056}, "k": 10, "alpha": 0.3, "reranker": "", "sample_type": "small", "init": 5}
+{"method": "PPR", "final scores": {"recallk": 0.3959359221108936, "mrr": 0.6304511278195488, "ndcg": 0.32010277689421596, "mapk": 0.6635296210403439}, "k": 10, "alpha": 0.3, "reranker": "", "sample_type": "medium", "init": 5}
+{"method": "PPR", "final scores": {"recallk": 0.36733944581697414, "mrr": 0.6941102756892231, "ndcg": 0.2972493331202167, "mapk": 0.72188519075963}, "k": 10, "alpha": 0.3, "reranker": "", "sample_type": "long", "init": 5}
