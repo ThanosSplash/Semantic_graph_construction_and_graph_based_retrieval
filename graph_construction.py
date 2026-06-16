@@ -16,8 +16,15 @@ from datetime import datetime
 import uuid
 
 
-def build_threshold_graph(corpus, threshold_params, preprocess, name, save):
-    G = nx.Graph()
+def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_params, save):
+    if len(corpus) == 0:
+        print("Warning: empty cluster, skipping.")
+        return nx.Graph()
+
+    if graph_params["Directed"] == False:
+        G = nx.Graph()
+    else:
+        G = nx.DiGraph()
 
     ids = list(corpus.keys())
     embeddings = np.array(list(corpus.values()))
@@ -42,7 +49,10 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, save):
         for j in range(i + 1, n):
             sim = sim_matrix[i, j]
             if sim >= threshold:
-                G.add_edge(ids[i], ids[j], weight=sim)
+                if graph_params["Weighted"] == True:
+                    G.add_edge(ids[i], ids[j], weight=sim)
+                else:
+                    G.add_edge(ids[i], ids[j])
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
@@ -50,6 +60,7 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, save):
         config["graph_type"] = "threshold graph"
         config["threshold"] = threshold_params
         config["preprocess"] = preprocess
+        config["graph_construction"] = graph_params
         dt.save_graph_data(config, name)
         dt.save_graph(G, name)
 
@@ -57,9 +68,16 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, save):
     return G
 
 
-def build_knn_graph(corpus, knn_params, preprocess, name, save):
+def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
     # Building a graph where the edges are formed using the knn algorithm
-    G = nx.Graph()
+    if len(corpus) == 0:
+        print("Warning: empty cluster, skipping.")
+        return nx.Graph()
+    if graph_params["Directed"] == False:
+       G = nx.Graph()
+    else:
+       G = nx.DiGraph()
+
     for id in corpus:
         G.add_node(id)
     ids = list(corpus.keys())
@@ -81,7 +99,11 @@ def build_knn_graph(corpus, knn_params, preprocess, name, save):
                     sim = 1.0 - distances[i][j]
                 elif knn_params["metric"] in ("euclidean", "minkowski", "manhattan"):
                     sim = np.exp(-distances[i][j])
-                G.add_edge(node_id, ids[nearest], weight=sim)
+
+                if graph_params["Weighted"] == True:
+                    G.add_edge(node_id, ids[nearest], weight=sim)
+                else:
+                    G.add_edge(node_id, ids[nearest])
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
 
@@ -89,6 +111,7 @@ def build_knn_graph(corpus, knn_params, preprocess, name, save):
         config = {}
         config["graph_type"] = "knn graph"
         config["knn"] = knn_params
+        config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
 
         dt.save_graph_data(config, name)
@@ -98,9 +121,15 @@ def build_knn_graph(corpus, knn_params, preprocess, name, save):
     return G
 
 
-def build_mutual_knn_graph(corpus, knn_params, preprocess, name, save):
+def build_mutual_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
     # Building a graph where the edges are formed using the mutual knn algorithm
-    G = nx.Graph()
+    if len(corpus) == 0:
+        print("Warning: empty cluster, skipping.")
+        return nx.Graph()
+    if graph_params["Directed"] == False:
+        G = nx.Graph()
+    else:
+        G = nx.DiGraph()
     for id in corpus:
         G.add_node(id)
 
@@ -116,7 +145,7 @@ def build_mutual_knn_graph(corpus, knn_params, preprocess, name, save):
     # Constructing the graph
     d = {}
     for i, neighbors in enumerate(indices):
-        d[i] = (list(neighbors[1:]), distances[i][1:])  # list not set
+        d[i] = (list(neighbors[1:]), distances[i][1:])
 
     for id in d.keys():
         for i, neighbor in enumerate(d[id][0]):
@@ -125,21 +154,102 @@ def build_mutual_knn_graph(corpus, knn_params, preprocess, name, save):
                     sim = 1.0 - d[id][1][i]
                 elif knn_params["metric"] in ("euclidean", "minkowski", "manhattan"):
                     sim = np.exp(-d[id][1][i])
-                G.add_edge(ids[id], ids[neighbor], weight=sim)
+                if graph_params["Weighted"] == True:
+                    G.add_edge(ids[id], ids[neighbor], weight=sim)
+                else:
+                    G.add_edge(ids[id], ids[neighbor])
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
         config = {}
         config["graph_type"] = "mutual knn graph"
         config["knn"] = knn_params
+        config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
         dt.save_graph_data(config, name)
         dt.save_graph(G, name)
 
     return G
 
+def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, flag):
+    graphs_knn = []
+    # Constructing the graph
+    for cluster_id in range(len(clustering_results["unique_clusters"])):
+        cluster_nodes = {
+            clustering_results["ids"][i]: clustering_results["embeddings"][i]
+            for i, label in enumerate(clustering_results["clustering_labels"])
+            if label == cluster_id
+        }
+        graph = build_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, flag)
+        if graph.number_of_nodes() > 0:
+            graphs_knn.append(graph)
 
-def build_clustering_graph(data, kmeans_params, agglo_params, knn_params, dbscan_params, preprocess, name ,algorithm="kmeans", clustering_result=None, flag=True):
+    knn_g = nx.compose_all(graphs_knn)
+
+    config = {}
+    config["clustering"] = clustering_results["clustering_params"]
+    config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+    config["graph_type"] = "clustering knn graph"
+    config["Graph building algorithm params"] = knn_params
+    config["graph_params"] = graph_params
+    config["Graph building algorithm"] = "KNN"
+    graph_id = name
+    dt.save_graph_data(config, graph_id, clustering_results["fig"])
+    dt.save_graph(knn_g, graph_id)
+    return
+def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, flag):
+    graphs_mutal_knn = []
+    # Constructing the graph
+    for cluster_id in range(len(clustering_results["unique_clusters"])):
+        cluster_nodes = {
+            clustering_results["ids"][i]: clustering_results["embeddings"][i]
+            for i, label in enumerate(clustering_results["clustering_labels"])
+            if label == cluster_id
+        }
+        graph =build_mutual_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, flag)
+        if graph.number_of_nodes() > 0:
+            graphs_mutal_knn.append(graph)
+    mutual_knn_g = nx.compose_all(graphs_mutal_knn)
+
+    config = {}
+    config["clustering"] = clustering_results["clustering_params"]
+    config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+    config["graph_type"] = "clustering mutual knn graph"
+    config["Building graph algorithm params"] = knn_params
+    config["graph_params"] = graph_params
+    config["Graph building algorithm"] = "MUTUAL KNN"
+    graph_id = " mutual_" + name
+    dt.save_graph_data(config, graph_id, clustering_results["fig"])
+    dt.save_graph(mutual_knn_g, graph_id)
+
+def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, flag):
+        graphs_threshold = []
+        # Constructing the graph
+        for cluster_id in range(len(clustering_results["unique_clusters"])):
+            cluster_nodes = {
+                clustering_results["ids"][i]: clustering_results["embeddings"][i]
+                for i, label in enumerate(clustering_results["clustering_labels"])
+                if label == cluster_id
+            }
+            graph = build_threshold_graph(cluster_nodes, threshold_params, clustering_results["preprocess"], "",
+                                           graph_params, flag)
+            if graph.number_of_nodes() > 0:
+                graphs_threshold.append(graph)
+        threshold_g = nx.compose_all(graphs_threshold)
+
+        config = {}
+        config["clustering"] = clustering_results["clustering_params"]
+        config["preprocess"] = (
+        str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+        config["graph_type"] = "clustering threshold graph"
+        config["Building graph algorithm params"] = threshold_params
+        config["graph_params"] = graph_params
+        config["Graph building algorithm"] = "Threshold"
+        graph_id =  name
+        dt.save_graph_data(config, graph_id, clustering_results["fig"])
+        dt.save_graph(threshold_g, graph_id)
+
+def build_clustering_graph(data, kmeans_params, agglo_params, knn_params, dbscan_params, preprocess, name , graph_params, algorithm="kmeans", clustering_result=None, flag=True):
     # Building multiples graphs using clustering
     config = {}
     if algorithm == "kmeans" and clustering_result == None:
@@ -150,13 +260,15 @@ def build_clustering_graph(data, kmeans_params, agglo_params, knn_params, dbscan
            "clustering_labels": clustering_labels,
            "ids": ids,
            "embeddings": embeddings,
-           "fig": fig
+           "fig": fig,
+           "clustering_params": kmeans_params
        }
        if flag == True:
            return clustering_result
 
 
     elif algorithm == "dbscan" and clustering_result == None:
+       cl.dbscan(data, dbscan_params, preprocess)
 
        return
 
@@ -183,8 +295,8 @@ def build_clustering_graph(data, kmeans_params, agglo_params, knn_params, dbscan
             for i, label in enumerate(clustering_labels)
             if label == cluster_id
         }
-        graphs_knn.append(build_knn_graph(cluster_nodes, knn_params, preprocess,"", False))
-        graphs_mutual_knn.append(build_mutual_knn_graph(cluster_nodes, knn_params, preprocess,"", False))
+        graphs_knn.append(build_knn_graph(cluster_nodes, knn_params, preprocess,"", graph_params, False))
+        graphs_mutual_knn.append(build_mutual_knn_graph(cluster_nodes, knn_params, preprocess,"", graph_params,False))
 
 
     knn_g = nx.compose_all(graphs_knn)

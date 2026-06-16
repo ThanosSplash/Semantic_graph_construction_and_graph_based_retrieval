@@ -115,7 +115,7 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
         clustering_labels = clustering.fit_predict(data_preprocessed)
         data_2d = PCA(n_components=2).fit_transform(data_preprocessed)
         # Plotting data and clusters
-        plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, clustering.cluster_centers_,
+        fig = plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, clustering.cluster_centers_,
                                               len(unique_clusters), clustering_labels)
         return unique_clusters, clustering_labels, ids, embeddings, fig
 
@@ -128,23 +128,54 @@ def dbscan(data, dbscan_params, preprocess):
     embeddings = np.array(list(data.values()))
     data_preprocessed = pipeline(embeddings, preprocess["scaler"], preprocess["pca"])
 
-    eps = float(input("Eps: "))
-    dbscan_params["eps"] = eps
-    min_samples = int(input("MinPts: "))
-    dbscan_params["min_samples"] = min_samples
 
-    dbscan_ = DBSCAN(eps=  dbscan_params["eps"], min_samples=dbscan_params["min_samples"], metric="cosine")
+    dbscan_ = DBSCAN(eps=dbscan_params["eps"], metric="cosine")
     clusters = dbscan_.fit_predict(data_preprocessed)
 
     unique_clusters = np.unique(clusters)
     data_2d = PCA(n_components=2).fit_transform(data_preprocessed)
     cluster_centers = np.array([data_preprocessed[clusters == cluster].mean(axis=0) for cluster in unique_clusters])
+    fig = plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, cluster_centers,
+                                          len(unique_clusters), clusters)
 
-    return unique_clusters, clusters, ids, embeddings
+    return unique_clusters, clusters, ids, embeddings, fig
 
 
 
+def perform_clustering(data, algorithm, kmeans_params, dbscan_params, agglo_params, preprocess):
+    if algorithm == "kmeans":
+        unique_clusters, clustering_labels, ids, embeddings, fig = kmeans(data, kmeans_params, agglo_params,
+                                                                             scaler=preprocess["scaler"],
+                                                                             pca=preprocess["pca"],
+                                                                             pipeline_id=kmeans_params["pipeline_id"])
+        clustering_result = {
+            "unique_clusters": unique_clusters,
+            "clustering_labels": clustering_labels,
+            "ids": ids,
+            "embeddings": embeddings,
+            "fig": fig,
+            "clustering_params": kmeans_params,
+            "preprocess": preprocess,
+            "clustering_algorithm": "kmeans"
+        }
+        return clustering_result
+    elif algorithm == "dbscan":
+        unique_clusters, clustering_labels, ids, embeddings, fig =  dbscan(data, dbscan_params, preprocess)
 
+        clustering_result = {
+            "unique_clusters": unique_clusters,
+            "clustering_labels": clustering_labels,
+            "ids": ids,
+            "embeddings": embeddings,
+            "fig": fig,
+            "clustering_params": dbscan_params,
+            "preprocess": preprocess,
+            "clustering_algorithm": "dbscan"
+        }
+        return clustering_result
+    else:
+        raise ValueError(f"Unknown clustering algorithm: {algorithm}")
+    return
 
 def dendrogram(data, method):
     # Constructing a dendrogram and saving it for future use

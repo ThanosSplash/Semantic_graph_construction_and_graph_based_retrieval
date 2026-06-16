@@ -86,6 +86,7 @@ def plot_cluster_with_silhouette(data, data_2d, centers, n_clusters, clustering_
         fontsize=14,
         fontweight="bold",
     )
+
     return fig
 
 
@@ -140,7 +141,7 @@ def plot_graph(G, name):
     nx.draw_networkx_labels(G, pos, font_size=10)
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels, font_size=8)
 
-    plt.title(name + ' Knowledge Graph')
+    plt.title(name + ' Semantic Graph')
     plt.axis('off')
 
 
@@ -168,7 +169,7 @@ def plot_subgraph(G, nodes):
     nx.draw_networkx_labels(S, pos, font_size=10)
     nx.draw_networkx_edge_labels(S, pos, edge_labels=labels, font_size=8, label_pos=0.3, verticalalignment='baseline')
 
-    plt.title('Knowledge Subgraph')
+    plt.title('Semantic Graph')
     plt.axis('off')
     plt.show()
 
@@ -191,12 +192,15 @@ def print_graph_stats(graph):
     graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
     graph_info["Graph Density"] = nx.density(graph)
     graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
-    graph_info["Number of connected components"] = nx.number_connected_components(graph)
+    graph_info["Number of connected components"] = nx.number_connected_components(graph.to_undirected())
     communities = community.greedy_modularity_communities(graph)
     community_list = list(communities)
     mod = community.modularity(graph, community_list)
     graph_info["Number of communities"] = (len(community_list), mod)
     graph_info = {k: convert(v) for k, v in graph_info.items()}
+    graph_info["largest_component_size"] = max(len(c) for c in nx.connected_components(graph.to_undirected()))
+    graph_info["avg_clustering"] = nx.average_clustering(graph, weight="weight")
+    graph_info["top_degree_nodes"]= sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
     return graph_info
 
 

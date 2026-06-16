@@ -20,9 +20,9 @@ def RR_score(predictions, correct_results):
     correct_set = set(correct_results)
     for indx, prediction in enumerate(predictions):
         if prediction in correct_set:
-            return 1/(indx + 1)
+            return 1/(indx + 1), indx
 
-    return 0
+    return 0, -1
 
 
 def MRR_score(rr_scores):
@@ -51,12 +51,15 @@ def avg_precision(predictions, correct_results, k):
 
 
 def nDCGk_score(predictions, correct_results, k):
+    if len(predictions) == 0:
+        return 0.0
     correct_set = set(correct_results)
+
 
     relevance = np.array([[1 if p in correct_set else 0 for p in predictions]])
 
-    # sort relevance descending
-    ideal = np.sort(relevance)[:, ::-1]
 
-    return ndcg_score(ideal, relevance, k=k)
+    mock_scores = np.array([[len(predictions) - i for i in range(len(predictions))]])
+
+    return ndcg_score(relevance, mock_scores, k=k)
 
