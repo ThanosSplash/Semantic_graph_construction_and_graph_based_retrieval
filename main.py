@@ -15,6 +15,7 @@ import clustering as cl
 import graph_construction as gc
 from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
+
 kmeans_grid = {
     "n_clusters": [2, 3, 4, 5, 6, 7, 8, 10],
     "init":       ["k-means++", "random"],

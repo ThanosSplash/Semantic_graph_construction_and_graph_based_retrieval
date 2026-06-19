@@ -67,9 +67,59 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_para
 
     return G
 
+def run_knn(corpus, preprocess, knn_params ):
+    try:
+        import cuml
+        from cuml.neighbors import NearestNeighbors
+        is_gpu = True
+    except ImportError:
+        from sklearn.neighbors import NearestNeighbors
+        print("Running on CPU using scikit-learn")
+        is_gpu = False
+
+    if len(corpus) == 0:
+        print("Warning: empty cluster, skipping.")
+        return nx.Graph()
+
+    ids = list(corpus.keys())
+    embeddings = np.array(list(corpus.values()))
+    data = cl.pipeline(embeddings, scaler=preprocess["scaler"], pca=preprocess["pca"])
+    if is_gpu:
+        # Μετατροπή των δεδομένων σε float32 (απαραίτητο για cuML)
+        if hasattr(data, 'astype'):
+            data = data.astype(np.float32)
+
+        # Κρατάμε μόνο όσες παραμέτρους καταλαβαίνει η cuML
+        allowed_gpu_metrics = ['l2', 'euclidean', 'cosine', 'correlation', 'manhattan']
+        metric = knn_params["metric"] if knn_params["metric"] in allowed_gpu_metrics else 'euclidean'
+
+        nn = NearestNeighbors(
+            n_neighbors=knn_params["n_neighbors"],
+            metric=metric,
+            algorithm='brute',
+            p=knn_params["p"]
+        )
+        print("Gpu knn")
+    else:
+        # CPU / scikit-learn (όλες οι παράμετροι επιτρέπονται)
+        nn = NearestNeighbors(
+            n_neighbors=knn_params["n_neighbors"], metric=knn_params["metric"],
+            algorithm=knn_params["algorithm"], radius=knn_params["radius"],
+            leaf_size=knn_params["leaf_size"], p=knn_params["p"],
+            metric_params=knn_params["metric_params"], n_jobs=knn_params["n_jobs"]
+        )
+
+    nn.fit(data)
+    distances, indices = nn.kneighbors(data)
+    if is_gpu:
+           indices = indices.to_numpy() if hasattr(indices, 'to_numpy') else indices
+           distances = distances.to_numpy() if hasattr(distances, 'to_numpy') else distances
+    return indices, distances, ids
 
 def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
     # Building a graph where the edges are formed using the knn algorithm
+
+
     if len(corpus) == 0:
         print("Warning: empty cluster, skipping.")
         return nx.Graph()
@@ -78,18 +128,10 @@ def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
     else:
        G = nx.DiGraph()
 
+    indices, distances, ids = run_knn(corpus, preprocess, knn_params)
+
     for id in corpus:
         G.add_node(id)
-    ids = list(corpus.keys())
-    embeddings = np.array(list(corpus.values()))
-    data = cl.pipeline(embeddings, scaler=preprocess["scaler"], pca=preprocess["pca"])
-    nn = NearestNeighbors(n_neighbors=knn_params["n_neighbors"], metric=knn_params["metric"],
-                          algorithm=knn_params["algorithm"], radius=knn_params["radius"],
-                          leaf_size=knn_params["leaf_size"], p=knn_params["p"],
-                          metric_params=knn_params["metric_params"], n_jobs=knn_params["n_jobs"])
-    nn.fit(data)
-    distances, indices = nn.kneighbors(data)
-
     # Constructing the graph
     for i, neighbors in enumerate(indices):
         node_id = ids[i]
@@ -133,15 +175,7 @@ def build_mutual_knn_graph(corpus, knn_params, preprocess, name, graph_params, s
     for id in corpus:
         G.add_node(id)
 
-    ids = list(corpus.keys())
-    embeddings = np.array(list(corpus.values()))
-    data = cl.pipeline(embeddings, scaler=preprocess["scaler"], pca=preprocess["pca"])
-    nn = NearestNeighbors(n_neighbors=knn_params["n_neighbors"], metric=knn_params["metric"],
-                          algorithm=knn_params["algorithm"], radius=knn_params["radius"],
-                          leaf_size=knn_params["leaf_size"], p=knn_params["p"],
-                          metric_params=knn_params["metric_params"], n_jobs=knn_params["n_jobs"])
-    nn.fit(data)
-    distances, indices = nn.kneighbors(data)
+    indices, distances, ids = run_knn(corpus, preprocess, knn_params)
     # Constructing the graph
     d = {}
     for i, neighbors in enumerate(indices):
