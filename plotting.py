@@ -184,23 +184,28 @@ def convert(obj):
 
 
 def print_graph_stats(graph):
-    # Function that prints important metrics for the given graph
     graph_info = {}
+
+    undirected = graph.to_undirected()
+    components = list(nx.connected_components(undirected))
 
     graph_info["Nodes"] = graph.number_of_nodes()
     graph_info["Edges"] = graph.number_of_edges()
     graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
     graph_info["Graph Density"] = nx.density(graph)
     graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
-    graph_info["Number of connected components"] = nx.number_connected_components(graph.to_undirected())
+    graph_info["Number of connected components"] = len(components)
+
     communities = community.greedy_modularity_communities(graph)
     community_list = list(communities)
     mod = community.modularity(graph, community_list)
     graph_info["Number of communities"] = (len(community_list), mod)
+
     graph_info = {k: convert(v) for k, v in graph_info.items()}
-    graph_info["largest_component_size"] = max(len(c) for c in nx.connected_components(graph.to_undirected()))
+    graph_info["largest_component_size"] = max(len(c) for c in components)
     graph_info["avg_clustering"] = nx.average_clustering(graph, weight="weight")
-    graph_info["top_degree_nodes"]= sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
+    graph_info["top_degree_nodes"] = sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
+
     return graph_info
 
 
