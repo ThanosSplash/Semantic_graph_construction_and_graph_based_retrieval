@@ -196,7 +196,7 @@ def print_graph_stats(graph):
     graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
     graph_info["Number of connected components"] = len(components)
 
-    communities = community.greedy_modularity_communities(graph)
+    communities = nx.community.louvain_communities(graph, weight="weight")
     community_list = list(communities)
     mod = community.modularity(graph, community_list)
     graph_info["Number of communities"] = (len(community_list), mod)
