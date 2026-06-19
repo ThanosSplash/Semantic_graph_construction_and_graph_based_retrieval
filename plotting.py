@@ -186,26 +186,56 @@ def convert(obj):
 def print_graph_stats(graph):
     graph_info = {}
 
-    undirected = graph.to_undirected()
-    components = list(nx.connected_components(undirected))
-
     graph_info["Nodes"] = graph.number_of_nodes()
     graph_info["Edges"] = graph.number_of_edges()
-    graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
     graph_info["Graph Density"] = nx.density(graph)
     graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
-    graph_info["Number of connected components"] = len(components)
-
-    communities = nx.community.louvain_communities(graph, weight="weight")
-    community_list = list(communities)
-    mod = community.modularity(graph, community_list)
-    graph_info["Number of communities"] = (len(community_list), mod)
-
-    graph_info = {k: convert(v) for k, v in graph_info.items()}
-    graph_info["largest_component_size"] = max(len(c) for c in components)
-    graph_info["avg_clustering"] = nx.average_clustering(graph, weight="weight")
     graph_info["top_degree_nodes"] = sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
 
+    try:
+        import cudf, cugraph
+
+        edges = nx.to_pandas_edgelist(graph)
+        edges_gdf = cudf.from_pandas(edges)
+        G_gpu = cugraph.Graph()
+        G_gpu.from_cudf_edgelist(edges_gdf, source="source", destination="target", edge_attr="weight")
+
+        # --- Pagerank top-5 ---
+        pr_df = cugraph.pagerank(G_gpu).to_pandas()
+        top5 = pr_df.sort_values("pagerank", ascending=False).head(5)
+        graph_info["Pagerank Top Nodes"] = list(zip(top5["vertex"], top5["pagerank"]))
+
+        # --- Louvain communities ---
+        parts_df, mod = cugraph.louvain(G_gpu)
+        parts_pd = parts_df.to_pandas()
+        num_communities = parts_pd["partition"].nunique()
+        graph_info["Number of communities"] = (int(num_communities), float(mod))
+
+        # --- Connected components ---
+        cc_df = cugraph.weakly_connected_components(G_gpu).to_pandas()
+        sizes = cc_df.groupby("labels").size()
+        graph_info["Number of connected components"] = int(sizes.shape[0])
+        graph_info["largest_component_size"] = int(sizes.max())
+
+        # avg_clustering has no cugraph equivalent — fall back to networkx for this one
+        graph_info["avg_clustering"] = nx.average_clustering(graph, weight="weight")
+
+    except ImportError:
+        undirected = graph.to_undirected()
+        components = list(nx.connected_components(undirected))
+
+        graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
+        graph_info["Number of connected components"] = len(components)
+
+        communities = nx.community.louvain_communities(graph, weight="weight")
+        community_list = list(communities)
+        mod = community.modularity(graph, community_list)
+        graph_info["Number of communities"] = (len(community_list), mod)
+
+        graph_info["largest_component_size"] = max(len(c) for c in components)
+        graph_info["avg_clustering"] = nx.average_clustering(graph, weight="weight")
+
+    graph_info = {k: convert(v) for k, v in graph_info.items()}
     return graph_info
 
 
