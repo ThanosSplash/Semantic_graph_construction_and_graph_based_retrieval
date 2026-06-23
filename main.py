@@ -280,7 +280,7 @@ def run_eval_tests():
 
 
 if __name__ == "__main__":
-    MODE = str(input("Choose Mode, Make a test graph/Run retrieval/Make embeddings/Make leaderboard: "))
+    MODE = str(input("Choose Mode, Make a test graph/Run a test retrieval/Run retrieval/Make embeddings/Make leaderboard: "))
 
 
 
@@ -302,6 +302,49 @@ if __name__ == "__main__":
         )
     elif MODE == "Make query samples":
         make_query_samples()
+    elif MODE == "Run a test retrieval":
+        METHOD = str(input("Choose method, Baseline, PPR, K steph, Hits, Shortest Path: "))
+        small, medium, long = dt.load_samples()
+        files = dt.get_files()
+        file = files[0]
+        all_samples = small + medium + long
+        k = int(input("k (int): ").strip())
+        if METHOD == "Baseline":
+            ex.baseline_search(small, k, f"graphs/{file}", "small")
+            ex.baseline_search(medium, k, f"graphs/{file}", "medium")
+            ex.baseline_search(long, k, f"graphs/{file}", "long")
+            ex.baseline_search(all_samples, k, f"graphs/{file}", "all_samples")
+        elif METHOD == "PPR":
+            graph = dt.load_graph(file)
+            init = int(input("init (int): ").strip())
+            alpha = float(input("alpha (float): ").strip())
+
+            ex.personalised_pagerank_search(small, graph, k, f"graphs/{file}", init, "small", alpha)
+            ex.personalised_pagerank_search(medium, graph, k, f"graphs/{file}", init, "medium", alpha)
+            ex.personalised_pagerank_search(long, graph, k, f"graphs/{file}", init, "long", alpha)
+            ex.personalised_pagerank_search(all_samples, graph, k, f"graphs/{file}", init, "all_samples", alpha)
+        elif METHOD == "K steph":
+            graph = dt.load_graph(file)
+            init = int(input("init (int): ").strip())
+            alpha = float(input("alpha (float): ").strip())
+            k_step = int(input("k_steph (int): ").strip())
+            RERANKER = str(input("Choose reranker, BM25, graph_aware, cross_encoder: "))
+            ex.k_steph_search(small, graph, RERANKER, k, k_step, alpha,f"graphs/{file}", init, "small")
+            ex.k_steph_search(medium, graph, RERANKER, k, k_step, alpha, f"graphs/{file}", init, "medium")
+            ex.k_steph_search(long, graph, RERANKER, k, k_step, alpha, f"graphs/{file}", init, "long")
+            ex.k_steph_search(all_samples, graph, RERANKER, k, k_step, alpha, f"graphs/{file}", init, "all_samples")
+        elif METHOD == "Hits":
+            ex.hits_search()
+        elif METHOD == "Shortest Path":
+            graph = dt.load_graph(file)
+            init = int(input("init (int): ").strip())
+            alpha = float(input("alpha (float): ").strip())
+            RERANKER = str(input("Choose reranker, BM25, graph_aware, cross_encoder: "))
+            ex.shortest_path_search(small, graph, RERANKER, k, alpha, f"graphs/{file}", init, "small")
+            ex.shortest_path_search(medium, graph, RERANKER, k, alpha, f"graphs/{file}", init, "medium")
+            ex.shortest_path_search(long, graph, RERANKER, k, alpha, f"graphs/{file}", init, "long")
+            ex.shortest_path_search(all_samples, graph, RERANKER, k, alpha, f"graphs/{file}", init, "all_samples")
+        dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
     elif MODE == "Make a test graph":
         q, a, c = dt.load_data()
         preprocess, graph_params = get_preprocess_graph_input()

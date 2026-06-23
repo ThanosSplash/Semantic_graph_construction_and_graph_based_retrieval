@@ -30,3 +30,7 @@
 {"method": "k-steph", "final scores": {"recallk": 0.49455877965426087, "mrr": 0.721813462226996, "ndcg": 0.43706099257935394, "mapk": 0.7259563174053139}, "k": 10, "reranker": "cross_encoder", "sample_type": "medium", "init": 5}
 {"method": "k-steph", "final scores": {"recallk": 0.4738621366099531, "mrr": 0.7907268170426065, "ndcg": 0.43580601751411296, "mapk": 0.783612929056612}, "k": 10, "reranker": "cross_encoder", "sample_type": "long", "init": 5}
 {"method": "k-steph", "final scores": {"recallk": 0.4796562870948044, "mrr": 0.7334616302661416, "ndcg": 0.43248684556481376, "mapk": 0.7350898438148696}, "k": 10, "reranker": "cross_encoder", "sample_type": "all_samples", "init": 5}
+{"method": "k-steph", "final scores": {"recallk": 0.4457298770059832, "mrr": 0.6225026852846401, "ndcg": 0.35236820148011894, "mapk": 0.6371852106803605}, "k": 10, "reranker": "BM25", "sample_type": "small", "init": 5}
+{"method": "k-steph", "final scores": {"recallk": 0.47124443606823474, "mrr": 0.6611528822055137, "ndcg": 0.378456322268566, "mapk": 0.6750678441203305}, "k": 10, "reranker": "BM25", "sample_type": "medium", "init": 5}
+{"method": "k-steph", "final scores": {"recallk": 0.4570855972873815, "mrr": 0.7033297529538132, "ndcg": 0.36550395986800566, "mapk": 0.7224284908496332}, "k": 10, "reranker": "BM25", "sample_type": "long", "init": 5}
+{"method": "k-steph", "final scores": {"recallk": 0.45801997012053286, "mrr": 0.6623284401479891, "ndcg": 0.3654428278722302, "mapk": 0.6782271818834414}, "k": 10, "reranker": "BM25", "sample_type": "all_samples", "init": 5}

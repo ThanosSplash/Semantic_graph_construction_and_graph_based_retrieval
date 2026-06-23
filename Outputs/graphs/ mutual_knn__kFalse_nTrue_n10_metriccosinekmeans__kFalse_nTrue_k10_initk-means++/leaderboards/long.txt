@@ -6,6 +6,7 @@ Baseline | k=10                                   0.4792      0.7375    0.3860  
 k-steph | k=10 | reranker=cross_encoder | init=5  0.4739      0.7907    0.4358    0.7836    
 k-steph | k=10 | reranker=BM25 | init=5           0.4571      0.7033    0.3655    0.7224    
 k-steph | k=10 | reranker=BM25 | init=5           0.4571      0.7046    0.3668    0.7234    
+k-steph | k=10 | reranker=BM25 | init=5           0.4571      0.7033    0.3655    0.7224    
 k-steph | k=10 | reranker=graph_aware | init=5    0.4534      0.6989    0.3608    0.7226    
 k-steph | k=10 | reranker=graph_aware | init=5    0.4510      0.6728    0.3431    0.7037    
 PPR | k=10 | init=5                               0.3673      0.6954    0.2921    0.7244    
