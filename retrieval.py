@@ -10,6 +10,7 @@ from sentence_transformers import CrossEncoder
 from collections import defaultdict
 from rank_bm25 import BM25Okapi
 import transformers
+import torch
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
@@ -107,7 +108,10 @@ def rerank_cross_encoder(query_id, ids):
     query_emb = q[query_id]
     query_correct_results = query_emb[1]
     query_text = q_text[query_id]
-    cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    if torch.cuda.is_available():
+         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
+    else:
+         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
     pairs = [(query_text, c_text[id]) for id in ids]
     scores = cross_encoder.predict(pairs, show_progress_bar=False)
     final_scores = sorted(
