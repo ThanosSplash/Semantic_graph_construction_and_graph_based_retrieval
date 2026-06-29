@@ -5,8 +5,10 @@ import pickle
 import networkx as nx
 import os
 import pyarrow
-
+import numpy as np
 import plotting
+from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
 
 """-----------------------------------------------------------------------------Dataset preperation-----------------------------------------------------------------------------"""
 
@@ -79,6 +81,7 @@ def save_graph_data(data, graph_id, fig = None):
 
 
 def save_eval_results(indexes, params, method, final_scores, results_file):
+
     record = {
         "method": method,
         "final scores": final_scores,
@@ -93,18 +96,20 @@ def save_eval_results(indexes, params, method, final_scores, results_file):
     queries_file = f"{directory_name}/queries.json"
 
     # Load existing data if file exists
-    if os.path.exists(queries_file):
+    if os.path.exists(queries_file) and os.path.getsize(queries_file) != 0:
         with open(queries_file, "r") as f:
             all_queries = json.load(f)
     else:
         all_queries = {}
 
-    # Update each query
-    for query_id, data in indexes.items():
-        if query_id not in all_queries:
-            all_queries[query_id] = {"query_id": query_id, "results": []}
 
-        all_queries[query_id]["results"].append({
+        # Update each query
+    for query_id, data in indexes.items():
+        if str(query_id) not in all_queries:
+
+            all_queries[str(query_id)] = {"query_id": query_id, "results": []}
+
+        all_queries[str(query_id)]["results"].append({
             "method": method,
             "model": results_file,
             **params,
@@ -117,7 +122,6 @@ def save_eval_results(indexes, params, method, final_scores, results_file):
 
 
     return
-
 
 def load_graph(name):
 
@@ -178,7 +182,7 @@ def load_samples():
 
 
 COL_WIDTHS = {
-    "method": 50,
+    "method": 65,
     "recall": 12,
     "mrr": 10,
     "ndcg": 10,
@@ -218,8 +222,8 @@ def save_leaderboard(eval_file, output_dir):
             if "k" in r:
                 parts.append(f"k={r['k']}")
 
-            if "a" in r and r["a"] != "":
-                parts.append(f"a={r['a']}")
+            if "alpha" in r and r["alpha"] != "":
+                parts.append(f"a={r['alpha']}")
 
             if "reranker" in r and r["reranker"] != "":
                 parts.append(f"reranker={r['reranker']}")

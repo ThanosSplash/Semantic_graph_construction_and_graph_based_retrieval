@@ -11,6 +11,7 @@ from collections import defaultdict
 from rank_bm25 import BM25Okapi
 import transformers
 import torch
+import time
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
@@ -62,171 +63,6 @@ def get_nodes_in_shortest_paths(graph, nodes):
 
     return list(all_path_nodes)
 
-def ppr_graph_scores(graph, ids, similarities, nodes = None):
-    # Function that calculates the top-k nodes using personalised pagerank
-    node_to_idx = {node: idx for idx, node in enumerate(graph.nodes())}
-    adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
-
-    # Build personalization vector: normalize similarities as seed weights
-    total = sum(similarities)
-    weights = {
-        node_to_idx[node_id]: similarities[i] / total
-        for i, node_id in enumerate(ids)
-        if node_id in node_to_idx
-    }
-
-    # Running Pagerank algorithm
-    pagerank = PageRank()
-
-    scores_personal = pagerank.fit_predict(adjacency, weights)
-    node_scores = zip(graph.nodes(), scores_personal)
-    node_scores = {node: score for node, score in node_scores if node in nodes}
-    return node_scores
-
-
-"""-------------------------------------------------------------Help functions-------------------------------------------------------------"""
-"""-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
-def rerank_graph_aware(graph, query_id, ids, important_nodes, sims, alpha):
-    sim_dict, query_correct_results = sim_scores_for_query(query_id, ids)
-    final_scores = []
-    # graph_scores = pagerank(graph, 0, ids)
-    # Calculating graph score for the important nodes using personalised pagerank
-    graph_scores = ppr_graph_scores(graph, important_nodes, sims, ids)
-    # Calculating total scores for each node
-    for i, node_id in enumerate(ids):
-        # graph_score = neighbors[node_id]
-        graph_score = graph_scores[node_id]
-        score = alpha * sim_dict[node_id] + (1 - alpha) * graph_score
-        final_scores.append((node_id, score))
-    final_scores.sort(key=lambda x: -x[1])
-    return final_scores, query_correct_results
-
-def rerank_cross_encoder(query_id, ids):
-    transformers.logging.set_verbosity_error()
-    q_text, a_text, c_text = dt.load_texts()
-    q, a, c = dt.load_data()
-    query_emb = q[query_id]
-    query_correct_results = query_emb[1]
-    query_text = q_text[query_id]
-    if torch.cuda.is_available():
-         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
-    else:
-         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-    pairs = [(query_text, c_text[id]) for id in ids]
-    scores = cross_encoder.predict(pairs, show_progress_bar=False)
-    final_scores = sorted(
-        zip(ids, scores),
-        key=lambda x: x[1],
-        reverse=True
-    )
-    return final_scores, query_correct_results
-
-
-def rerank_hybrid(query_id, ids, alpha=0.5):
-    q, a, c = dt.load_data()
-    q_text, a_text, c_text = dt.load_texts()
-    query_emb = q[query_id]
-    query_correct_results = query_emb[1]
-    query_text = q_text[query_id]
-
-    texts = [c_text[id][0] for id in ids]
-    embs = [c[id][0] for id in ids]
-
-    bm25 = BM25Okapi([t.split() for t in texts])
-    bm25_scores = np.array(bm25.get_scores(query_text.split()))
-    sim_dict, query_correct_results = sim_scores_for_query(query_id, ids)
-    sem_scores = np.array([sim_dict[id] for id in ids])
-    final_scores = []
-
-    bm25_norm = normalize(bm25_scores)
-    sem_norm = normalize(sem_scores)
-    final_scores = [
-        (node_id, alpha * sem_norm[i] + (1 - alpha) * bm25_norm[i])
-        for i, node_id in enumerate(ids)
-    ]
-    final_scores.sort(key=lambda x: -x[1])
-
-
-    return final_scores, query_correct_results
-"""-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
-
-"""-------------------------------------------------------------Retrieval Techniques-------------------------------------------------------------"""
-
-def sim_scores_for_query(query_id, ids=None):
-
-    q, a, c = dt.load_data()
-    query = q[query_id]
-    query_emb = query[0].reshape(1, -1)
-    query_correct_results = query[1]
-    if ids is None:
-        documents = list(c.keys())
-        embeddings = np.vstack(list(c.values()))
-    else:
-        documents = list(ids)
-        embeddings = np.vstack([c[id] for id in ids if id in c.keys()])
-
-    # All similarities at once
-    sims = cosine_similarity(query_emb, embeddings).flatten()
-    sims = np.maximum(sims, 0)
-    sim_dict = dict(zip(documents, sims))
-    return sim_dict, query_correct_results
-
-def top_k(query_id, k):
-   # Given an list of ids using cosine similarity score find the top k most similar passages and then calcualting the metrics
-   # Loading data
-
-   sim_dict, query_correct_results = sim_scores_for_query(query_id)
-
-   # Sort by similarity descending
-   sorted_docs = sorted(
-       sim_dict.items(),
-       key=lambda x: x[1],
-       reverse=True
-   )
-
-   top_k_docs = sorted_docs[:k]
-
-   pred_results = [doc for doc, sim in top_k_docs]
-   pred_sim = [sim for doc, sim in top_k_docs]
-
-   return pred_results, query_correct_results, pred_sim
-
-
-def personalised_pagerank(graph, ids, similarities, k, query_id, alpha):
-    # Function that calculates the top-k nodes using personalised pagerank
-    node_to_idx = {node: idx for idx, node in enumerate(graph.nodes())}
-    adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
-
-    # Build personalization vector: normalize similarities as seed weights
-    total = sum(similarities)
-    weights = {
-        node_to_idx[node_id]: similarities[i] / total
-        for i, node_id in enumerate(ids)
-        if node_id in node_to_idx
-    }
-
-    # Running Pagerank algorithm
-    pagerank = PageRank()
-
-    scores_personal = pagerank.fit_predict(adjacency, weights)
-    graph_scores = dict(zip(graph.nodes(), scores_personal))
-    sim_dict, query_correct_results = sim_scores_for_query(query_id)
-    final_scores = []
-    # graph_scores = pagerank(graph, 0, ids)
-    # Calculating graph score for the important nodes using personalised pagerank
-    # Calculating total scores for each node
-    for i, node_id in enumerate(ids):
-        # graph_score = neighbors[node_id]
-        #graph_score = graph_scores[node_id]
-        score = alpha * sim_dict[node_id] + (1 - alpha) * graph_scores[node_id]
-        final_scores.append((node_id, score))
-    final_scores.sort(key=lambda x: -x[1])
-    return [node for node, _ in final_scores[:k]]
-
-
-
-
-
 
 def pagerank(graph, k, nodes=None):
     # Function that calculates the top-k nodes using pagerank
@@ -247,19 +83,249 @@ def pagerank(graph, k, nodes=None):
         return top_nodes
 
 
+def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids):
+    """Given the retrieved ids using the personalised pagerank algorithm
+       to calculate the graph score for them
+    graph: The semantic graph
+    init_nodes: The node to init personalised pagerank algorithm
+    sims: Similarities for the personalised pagerank algorithm
+    retrieved_ids: The ids that the retriever method retrieved
+    """
+    # Making the adjacency matrix and calculating the weights for the init nodes
+    node_to_idx = {node: idx for idx, node in enumerate(graph.nodes())}
+    adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
+    # Safety check
+    valid = [(node_id, sims[i]) for i, node_id in enumerate(init_nodes) if node_id in node_to_idx]
+    total = sum(score for _, score in valid)
+    if total == 0 or len(valid) == 0:
+        raise Exception("Zero valid ids")
 
-def k_step_neighborhood_expansion(graph, important_nodes, query_id, k, hops, alpha, sims, reranker_type):
-    # Function that calculates the top-k nodes using k step neighborhood expansion
-    neighbors = get_neighbors(graph, important_nodes, hops) # Finding the neighbors
+    weights = {
+        node_to_idx[node_id]: sim / total
+        for node_id, sim in valid
+        if node_id in node_to_idx
+    }
+
+    # Running Pagerank algorithm
+    pagerank = PageRank()
+    # Calculating the graph score for all the nodes
+    scores_personal = pagerank.fit_predict(adjacency, weights)
+    # Choosing the nodes in the retrieved_ids
+    node_scores = zip(graph.nodes(), scores_personal)
+    node_scores = {node: score for node, score in node_scores if node in retrieved_ids}
+    return node_scores
+
+def sim_scores_for_query(query_id, retrieved_ids=None):
+
+    q, _, c = dt.load_data()
+    # Safety check
+    if query_id not in q:
+        raise Exception(f"Id not found {query_id}")
+    query = q[query_id]
+    query_emb = query[0].reshape(1, -1)
+    query_correct_results = query[1]
+    if retrieved_ids is None:
+        documents = list(c.keys())
+        embeddings = np.vstack(list(c.values()))
+    else:
+        documents = list(retrieved_ids)
+        embeddings = np.vstack([c[id] for id in retrieved_ids if id in c.keys()])
+
+    # All similarities at once
+    sims = cosine_similarity(query_emb, embeddings).flatten()
+    sims = np.maximum(sims, 0)
+    sim_dict = dict(zip(documents, sims))
+
+    return sim_dict, query_correct_results
+
+"""-------------------------------------------------------------Help functions-------------------------------------------------------------"""
+"""-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
+def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha):
+    """Given the retrieved ids using the similarity score and personalised pagerank score (graph score)
+       to make a new rankings for them
+       graph: The semantic graph
+       query_id: The id of the query
+       retrieved_ids: The ids that the retriever method retrieved
+       init_nodes: The node to init personalised pagerank algorithm
+       sims: Similarities for the personalised pagerank algorithm
+       alpha: Variable used to calculate the final score
+    """
+    # Calculating cosine sim
+    sim_dict, query_correct_results = sim_scores_for_query(query_id, retrieved_ids)
+    final_scores = []
+
+    # Calculating graph score using personalised pagerank
+    graph_scores = ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids)
+    # Calculating total scores for each node
+    for i, node_id in enumerate(retrieved_ids):
+        # graph_score = neighbors[node_id]
+        graph_score = graph_scores[node_id]
+        score = alpha * sim_dict[node_id] + (1 - alpha) * graph_score
+        final_scores.append((node_id, score))
+
+    final_scores.sort(key=lambda x: -x[1])
+    return final_scores
+
+def rerank_cross_encoder(query_id, retrieved_ids):
+    """Given the retrieved ids using the cross encoder function to make a new rankings for them
+           query_id: The id of the query
+           retrieved_ids: The ids that the retriever method retrieved
+    """
+    transformers.logging.set_verbosity_error()
+    # Loading the texts for the queries and the corpus
+    q_text, _, c_text = dt.load_texts()
+    # Safety check
+    if query_id not in q_text:
+        raise Exception(f"Id not found {query_id}")
+    query_text = q_text[query_id]
+    # Checking if cude exists
+    if torch.cuda.is_available():
+         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
+    else:
+         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
+    # Making pairs for the cross encoder model
+    pairs = [(query_text, c_text[id]) for id in retrieved_ids]
+
+    scores = cross_encoder.predict(pairs, show_progress_bar=False)
+
+    final_scores = sorted(
+        zip(retrieved_ids, scores),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    return final_scores
+
+
+def rerank_bm25(query_id, retrieved_ids, alpha=0.5):
+    """Given the retrieved ids using the BM25 function to make a new rankings for them
+               query_id: The id of the query
+               retrieved_ids: The ids that the retriever method retrieved
+               alpha: Variable used to calculate the final score
+    """
+    # Loading the texts for the queries and the corpus
+    q_text, _, c_text = dt.load_texts()
+    # Safety check
+    if query_id not in q_text:
+        raise Exception(f"Id not found {query_id}")
+    query_text = q_text[query_id]
+
+    # Gathering the texts of the retrieved data
+    texts = [c_text[id] for id in retrieved_ids]
+    # Calculating the similarities and bm25 scores
+    bm25 = BM25Okapi([t.split() for t in texts])
+    bm25_scores = np.array(bm25.get_scores(query_text.split()))
+    sim_dict, query_correct_results = sim_scores_for_query(query_id, retrieved_ids)
+    sim_scores = np.array([sim_dict[id] for id in retrieved_ids])
+    # Normalise the scores
+    bm25_norm = normalize(bm25_scores)
+    sim_norm = normalize(sim_scores)
+
+    final_scores = [
+        (node_id, alpha * sim_norm[i] + (1 - alpha) * bm25_norm[i])
+        for i, node_id in enumerate(retrieved_ids)
+    ]
+    final_scores.sort(key=lambda x: -x[1])
+
+
+    return final_scores
+"""-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
+
+"""-------------------------------------------------------------Retrieval Techniques-------------------------------------------------------------"""
+
+
+def top_k(query_id, k):
+   """Given a query and the number of the documents to be retrieved,
+      retrieve the topk documents using cosine similarity
+      query_id : The id of the query
+      k: number of items to be retrieved
+   """
+   # Calculating similarities
+   sim_dict, query_correct_results = sim_scores_for_query(query_id)
+
+   # Sort by similarity descending
+   sorted_docs = sorted(
+       sim_dict.items(),
+       key=lambda x: x[1],
+       reverse=True
+   )
+   # Get the topk and making two lists for the ids and the similarity score
+   top_k_docs = sorted_docs[:k]
+   pred_results = [doc for doc, sim in top_k_docs]
+   pred_sim = [sim for doc, sim in top_k_docs]
+
+   return pred_results, query_correct_results, pred_sim
+
+
+def personalised_pagerank(graph, init_nodes, sims, k, query_id, alpha):
+    """Given the init ids using the personalised pagerank algorithm
+        to calculate the graph score for every node in the graph
+        retrieve the topk nodes with the highest score
+    graph: The semantic graph
+    init_nodes: The node to init personalised pagerank algorithm
+    sims: Similarities for the personalised pagerank algorithm
+    retrieved_ids: The ids that the retriever method retrieved
+    alpha: Variable used to calculate the final score
+    k: number of items to be retrieved
+    """
+    # Making the adjacency matrix and calculating the weights for the init nodes
+    node_to_idx = {node: idx for idx, node in enumerate(graph.nodes())}
+    adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
+    # Safety check
+    valid = [(node_id, sims[i]) for i, node_id in enumerate(init_nodes) if node_id in node_to_idx]
+    total = sum(score for _, score in valid)
+    if total == 0 or len(valid) == 0:
+        raise Exception("Zero valid ids")
+
+   # Build personalization vector: normalize similarities as seed weights
+    weights = {
+        node_to_idx[node_id]: sim / total
+        for node_id, sim in valid
+    }
+
+    # Running Pagerank algorithm
+    pagerank = PageRank()
+
+    # Calculating the graph score and similarity score for all the nodes
+    scores_personal = pagerank.fit_predict(adjacency, weights)
+    graph_scores = dict(zip(graph.nodes(), scores_personal))
+    sim_dict, query_correct_results = sim_scores_for_query(query_id)
+    final_scores = []
+    for node_id in graph.nodes:
+        score = alpha * sim_dict[node_id] + (1 - alpha) * graph_scores[node_id]
+        final_scores.append((node_id, score))
+    # Sorting based on final score and taking the topk
+    final_scores.sort(key=lambda x: -x[1])
+    return [node for node, _ in final_scores[:k]]
+
+
+def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, sims, reranker_type):
+    """Given the init ids and the query id retrieve the topk items using three different types of
+       reranker function
+        graph: The semantic graph
+        init_nodes: The node to init the k steph algorithm
+        sims: Similarities for the personalised pagerank algorithm
+        reranker_type: Name of the reranker function to use
+        hops: For the get_neighbors function. How far to expand through the graph
+        alpha: Variable used to calculate the final score
+        k: number of items to be retrieved
+        """
+    # Finding the neighbors
+    neighbors = get_neighbors(graph, init_nodes, hops) # Finding the neighbors
     ids = list(neighbors.keys())
+    if len(ids) <= 0:
+        raise Exception(f"Neighbors not found {ids}")
     # Calculating similarity scores
     final_scores = []
+    # Using a reranked function
     if reranker_type == "graph_aware":
-        final_scores, query_correct_results = rerank_graph_aware(graph, query_id, ids, important_nodes, sims, alpha)
+        final_scores = rerank_graph_aware(graph, query_id, ids, init_nodes, sims, alpha)
     elif reranker_type == "cross_encoder":
-        final_scores, query_correct_results = rerank_cross_encoder(query_id, ids)
+        final_scores = rerank_cross_encoder(query_id, ids)
     elif reranker_type == "BM25":
-        final_scores, query_correct_results = rerank_hybrid(query_id, ids, alpha)
+        final_scores = rerank_bm25(query_id, ids, alpha)
+    # Get the topk and making two lists for the ids and the  score
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]
     pred_scores = [score for _, score in top_k]
@@ -304,11 +370,11 @@ def shortest_path(graph, query_id, important_nodes, k, alpha, sims, reranker_typ
     # Calculating graph score for the important nodes using personalised pagerank
     final_scores = []
     if reranker_type == "graph_aware":
-        final_scores, query_correct_results = rerank_graph_aware(graph, query_id, nodes_in_path, important_nodes, sims, alpha)
+        final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, important_nodes, sims, alpha)
     elif reranker_type == "cross_encoder":
-        final_scores, query_correct_results = rerank_cross_encoder(query_id, nodes_in_path)
+        final_scores = rerank_cross_encoder(query_id, nodes_in_path)
     elif reranker_type == "BM25":
-        final_scores, query_correct_results = rerank_hybrid(query_id, nodes_in_path, alpha)
+        final_scores = rerank_bm25(query_id, nodes_in_path, alpha)
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]
     pred_scores = [score for _, score in top_k]

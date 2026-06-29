@@ -11,6 +11,13 @@ from sklearn.metrics import precision_score, recall_score
 import evaluation as ev
 import clustering
 import pandas as pd
+import itertools
+from copy import deepcopy
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.decomposition import PCA
+"""-------------------------------------------------------------Help functions-------------------------------------------------------------"""
+
+"""-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 def prepare_all():
     prepare_dataset()
     return
@@ -33,7 +40,7 @@ def prepare_dataset():
 def evaluate_method(method, scores, results_file, params):
     recall_total = [eval[1] for eval in scores["recall"]]
     rr_total = [eval[1] for eval in scores["rr"]]
-    first_rel_indx = {eval[0]: {"score": eval[1], "rank": eval[2] + 1 if eval[2] != -1 else None} for eval in scores["rr"]}
+    first_rel_indx = {eval[0]: {"score": eval[1], "rank": eval[2] + 1 if eval[2] != -1 else eval[2]} for eval in scores["rr"]}
     ndcg_total = [eval[1] for eval in scores["ndcg"]]
     avg_prec_sum = [eval[1] for eval in scores["avg_precisions"]]
 
@@ -42,7 +49,8 @@ def evaluate_method(method, scores, results_file, params):
     total_scores["mrr"] = ev.MRR_score(rr_total)
     total_scores["ndcg"] = sum(ndcg_total)/len(ndcg_total)
     total_scores["mapk"] = sum(avg_prec_sum)/len(avg_prec_sum)
-    reranker_type = params["reranker"]
+
+    print(total_scores)
 
 
 
@@ -52,7 +60,7 @@ def evaluate_method(method, scores, results_file, params):
     return
 
 
-
+"""-------------------------------------------------------------Search-------------------------------------------------------------"""
 def baseline_search(query_ids, k, results_file, sample_type):
     # Function that retrieves for each query the top-k most similar data and evaluates the results
     rr_scores = []
@@ -71,15 +79,14 @@ def baseline_search(query_ids, k, results_file, sample_type):
        recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
        score, rank = ev.RR_score(predictions, correct)
        rr_scores.append((query_id,  score, rank))
-       ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
+       ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
        avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
     # Printing and saving the results
     eval_scores["recall"] = recallk_scores
     eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = avg_precisions
-    eval_scores["avg_precisions"] = ndcg_scores
+    eval_scores["ndcg"] = ndcg_scores
+    eval_scores["avg_precisions"] = avg_precisions
     params["k"] = k
-    params["reranker"] = ""
     params["sample_type"] = sample_type
     evaluate_method("Baseline", eval_scores, results_file, params)
 
@@ -104,16 +111,15 @@ def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
     # Printing and saving the results
     eval_scores["recall"] = recallk_scores
     eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = avg_precisions
-    eval_scores["avg_precisions"] = ndcg_scores
+    eval_scores["ndcg"] = ndcg_scores
+    eval_scores["avg_precisions"] = avg_precisions
     params["k"] = k
     params["alpha"] = alpha
-    params["reranker"] = ""
     params["sample_type"] = sample_type
     params["init"] = init
     evaluate_method("PPR", eval_scores, results_file, params)
@@ -135,17 +141,18 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
 
     eval_scores["recall"] = recallk_scores
     eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = avg_precisions
-    eval_scores["avg_precisions"] = ndcg_scores
+    eval_scores["ndcg"] = ndcg_scores
+    eval_scores["avg_precisions"] = avg_precisions
     params["k"] = k
     params["reranker"] = reranker_type
     params["sample_type"] = sample_type
     params["init"] = init
+    params["alpha"] = alpha
     evaluate_method("k-steph", eval_scores, results_file, params)
     return
 
@@ -162,13 +169,13 @@ def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, samp
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
 
     eval_scores["recall"] = recallk_scores
     eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = avg_precisions
-    eval_scores["avg_precisions"] = ndcg_scores
+    eval_scores["ndcg"] = ndcg_scores
+    eval_scores["avg_precisions"] = avg_precisions
     params["k"] = k
     params["reranker"] = ""
     params["sample_type"] = sample_type
@@ -192,20 +199,20 @@ def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
 
     eval_scores["recall"] = recallk_scores
     eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = avg_precisions
-    eval_scores["avg_precisions"] = ndcg_scores
+    eval_scores["ndcg"] = ndcg_scores
+    eval_scores["avg_precisions"] = avg_precisions
     params["k"] = k
     params["reranker"] = reranker_type
     params["sample_type"] = sample_type
     params["init"] = init
     evaluate_method("Shortest Path", eval_scores, results_file, params)
     return
-
+"""-------------------------------------------------------------Search-------------------------------------------------------------"""
 def threshold_graph(sampled_items, threshold_params, preprocess, name, save):
     # Building a threshold graph
     gc.build_threshold_graph(sampled_items, threshold_params, preprocess, name, save)
@@ -214,7 +221,7 @@ def threshold_graph(sampled_items, threshold_params, preprocess, name, save):
     #nodes_to_plot = list(G.nodes())[:100]
     #gc.plot_subgraph(G, nodes_to_plot)
     return
-
+"""-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 def run_retrieval():
     q, a, c = dt.load_data()
     small, medium, long = dt.load_samples()
@@ -297,8 +304,7 @@ def run_retrieval():
                     samples, graph, "cross_encoder", k, k_step, 0.0, f"graphs/{file}", init, tag,
                 )
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
-
-
+"""-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 
 
 

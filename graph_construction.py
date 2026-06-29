@@ -77,33 +77,35 @@ def run_knn(corpus, preprocess, knn_params ):
         print("Running on CPU using scikit-learn")
         is_gpu = False
 
-    if len(corpus) == 0:
-        print("Warning: empty cluster, skipping.")
-        return nx.Graph()
+
 
     ids = list(corpus.keys())
     embeddings = np.array(list(corpus.values()))
     data = cl.pipeline(embeddings, scaler=preprocess["scaler"], pca=preprocess["pca"])
+    if knn_params["n_neighbors"] < len(corpus):
+       neighbors = knn_params["n_neighbors"]
+    else:
+       neighbors = len(corpus)
     if is_gpu:
-        # Μετατροπή των δεδομένων σε float32 (απαραίτητο για cuML)
+
         if hasattr(data, 'astype'):
             data = data.astype(np.float32)
 
-        # Κρατάμε μόνο όσες παραμέτρους καταλαβαίνει η cuML
+
         allowed_gpu_metrics = ['l2', 'euclidean', 'cosine', 'correlation', 'manhattan']
         metric = knn_params["metric"] if knn_params["metric"] in allowed_gpu_metrics else 'euclidean'
 
         nn = NearestNeighbors(
-            n_neighbors=knn_params["n_neighbors"],
+            n_neighbors=neighbors,
             metric=metric,
             algorithm='brute',
             p=knn_params["p"]
         )
         print("Gpu knn")
     else:
-        # CPU / scikit-learn (όλες οι παράμετροι επιτρέπονται)
+
         nn = NearestNeighbors(
-            n_neighbors=knn_params["n_neighbors"], metric=knn_params["metric"],
+            n_neighbors=neighbors, metric=knn_params["metric"],
             algorithm=knn_params["algorithm"], radius=knn_params["radius"],
             leaf_size=knn_params["leaf_size"], p=knn_params["p"],
             metric_params=knn_params["metric_params"], n_jobs=knn_params["n_jobs"]
@@ -123,6 +125,8 @@ def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
     if len(corpus) == 0:
         print("Warning: empty cluster, skipping.")
         return nx.Graph()
+
+
     if graph_params["Directed"] == False:
        G = nx.Graph()
     else:
