@@ -123,7 +123,7 @@ def merge(base: dict, overrides: dict) -> dict:
     return p
 
 
-def make_graphs(c, ex):
+def make_graphs(c):
     results = []   # collect (name, function, params) for logging
     for graph_c in graph_combinations:
      graph_params= {"Directed": graph_c["Directed"], "Weighted": graph_c["Weighted"]}
@@ -134,34 +134,33 @@ def make_graphs(c, ex):
 
 
         # ── knn_Graph ────────────────────────────────────────────────────────
-        #for knn_combo in grid_combinations(knn_grid):
-            #knn_params = merge(BASE_KNN, knn_combo)
-            #name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
-            #print(f"[knn_Graph]   {name}")
-            #gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            #results.append(("knn_Graph", name, knn_combo, pre))
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
+            print(f"[knn_Graph]   {name}")
+            gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+            results.append(("knn_Graph", name, knn_combo, pre))
 
         # ── mutual_knn ───────────────────────────────────────────────────────
-        #for knn_combo in grid_combinations(knn_grid):
-            #knn_params = merge(BASE_KNN, knn_combo)
-            #name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
-            #print(f"[mutual_knn]  {name}")
-            #gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            #results.append(("mutual_knn", name, knn_combo, pre))
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
+            print(f"[mutual_knn]  {name}")
+            gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+            results.append(("mutual_knn", name, knn_combo, pre))
         # ── kmeans clustering ───────────────────────────────────────────────────────
-        #for kmeans_combo in grid_combinations(kmeans_grid):
-            #kmeans_params = merge(BASE_KMEANS, kmeans_combo)
-            #name = make_name(f"kmeans_{pre_tag}", kmeans_combo, graph_params)
-            #clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
-                                                       #agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            #for knn_combo in grid_combinations(knn_grid):
-                #knn_params = merge(BASE_KNN, knn_combo)
+        for kmeans_combo in grid_combinations(kmeans_grid):
+            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+            name = make_name(f"kmeans_{pre_tag}", kmeans_combo, graph_params)
+            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
+            for knn_combo in grid_combinations(knn_grid):
+                knn_params = merge(BASE_KNN, knn_combo)
 
-                #name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
-                #print(f"[knn_clustering_Graph]   {name_}")
-                #gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
-                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                                                    # False)
+                name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
+                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
+                                                     False)
 
         for dbscan_combo in grid_combinations(dbscan_grid):
             dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
