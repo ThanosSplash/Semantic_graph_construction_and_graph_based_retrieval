@@ -87,8 +87,11 @@ def save_eval_results(indexes, params, method, final_scores, results_file):
         "final scores": final_scores,
         **params
     }
-    results_file += "/eval_results.json"
-    with open(f"Outputs/{results_file}", "a") as f:
+    if method.lower() != "baseline":
+        results_file += "/eval_results.json"
+    else:
+        results_file += "/global_eval_records.json"
+    with open(results_file, "a") as f:
         f.write(json.dumps(record) + "\n")
 
     directory_name = "Outputs/Queries"
@@ -121,7 +124,8 @@ def save_eval_results(indexes, params, method, final_scores, results_file):
         json.dump(all_queries, f, indent=2)
 
 
-    return
+
+
 
 def load_graph(name):
 
@@ -187,6 +191,7 @@ COL_WIDTHS = {
     "mrr": 10,
     "ndcg": 10,
     "map": 10,
+    "graph": 50,
 }
 
 def leaderboard_header():
@@ -196,6 +201,7 @@ def leaderboard_header():
         f"{'MRR':<{COL_WIDTHS['mrr']}}"
         f"{'nDCG':<{COL_WIDTHS['ndcg']}}"
         f"{'MAP':<{COL_WIDTHS['map']}}\n"
+        f"{'Graph':<{COL_WIDTHS['graph']}}\n"
         + "-" * sum(COL_WIDTHS.values())
     )
 
@@ -206,11 +212,15 @@ def leaderboard_row(row):
         f"{row['mrr']:<{COL_WIDTHS['mrr']}.4f}"
         f"{row['ndcg']:<{COL_WIDTHS['ndcg']}.4f}"
         f"{row['map']:<{COL_WIDTHS['map']}.4f}"
+        f"{row.get('graph', ''):<{COL_WIDTHS['graph']}}"
     )
-def save_leaderboard(eval_file, output_dir):
+def save_leaderboard(eval_file, output_dir, glob=False):
     grouped = {}
-
-    with open(eval_file + "/eval_results.json") as f:
+    if glob == False:
+        eval_dir = f"{eval_file}/eval_results.json"
+    else:
+        eval_dir = f"{eval_file}/global_eval_records.json"
+    with open(eval_dir) as f:
         for line in f:
             r = json.loads(line)
 
@@ -239,6 +249,7 @@ def save_leaderboard(eval_file, output_dir):
                 "mrr": final["mrr"],
                 "ndcg": final["ndcg"],
                 "map": final["mapk"],
+                "graph": r.get("graph", ""),
             })
 
     out_path = os.path.join(eval_file, output_dir)
@@ -258,4 +269,29 @@ def save_leaderboard(eval_file, output_dir):
                 f.write(leaderboard_row(row) + "\n")
 
             f.write("\n")
+
+
+def make_global_leaderboard():
+    out_path = "Outputs/Global leaderboard/global_eval_records.json"
+    #Gathering all the eval files from the graphs
+    files = get_files()
+    with open(out_path, "a") as f_out:  # fresh file each run
+        f_out.write("\n")
+        for file in files:
+            eval_path = f"Outputs/graphs/{file}/eval_results.json"
+            if not os.path.exists(eval_path):
+                continue
+            with open(eval_path) as f_in:
+                for line in f_in:
+                    line = line
+                    if not line:
+                        continue
+                    r = json.loads(line)
+                    r["graph"] = file
+                    f_out.write(json.dumps(r) + "\n")
+    save_leaderboard("Outputs/Global leaderboard", "leaderboards", True)
+
+
+
+
 """-----------------------------------------------------------------------------Leaderboard-----------------------------------------------------------------------------"""

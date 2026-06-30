@@ -40,7 +40,12 @@ def prepare_dataset():
 def evaluate_method(method, scores, results_file, params):
     recall_total = [eval[1] for eval in scores["recall"]]
     rr_total = [eval[1] for eval in scores["rr"]]
-    first_rel_indx = {eval[0]: {"score": eval[1], "rank": eval[2] + 1 if eval[2] != -1 else eval[2]} for eval in scores["rr"]}
+    recall_map = {r[0]: r[1] for r in scores["recall"]}
+    first_rel_indx = {eval[0]: {"mrr": eval[1],
+                                "rank": eval[2] + 1 if eval[2] != -1 else eval[2],
+                                "recall": recall_map[eval[0]]
+                                }
+                      for eval in scores["rr"]}
     ndcg_total = [eval[1] for eval in scores["ndcg"]]
     avg_prec_sum = [eval[1] for eval in scores["avg_precisions"]]
 
@@ -79,7 +84,7 @@ def baseline_search(query_ids, k, results_file, sample_type):
        recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
        score, rank = ev.RR_score(predictions, correct)
        rr_scores.append((query_id,  score, rank))
-       ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
+       ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
        avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
     # Printing and saving the results
     eval_scores["recall"] = recallk_scores
@@ -111,7 +116,7 @@ def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
     # Printing and saving the results
     eval_scores["recall"] = recallk_scores
@@ -141,7 +146,7 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
 
     eval_scores["recall"] = recallk_scores
@@ -169,7 +174,7 @@ def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, samp
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
 
     eval_scores["recall"] = recallk_scores
@@ -199,7 +204,7 @@ def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.ndcg_score_(predictions, correct, k)))
+        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
         avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
 
     eval_scores["recall"] = recallk_scores
@@ -213,17 +218,8 @@ def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file
     evaluate_method("Shortest Path", eval_scores, results_file, params)
     return
 """-------------------------------------------------------------Search-------------------------------------------------------------"""
-def threshold_graph(sampled_items, threshold_params, preprocess, name, save):
-    # Building a threshold graph
-    gc.build_threshold_graph(sampled_items, threshold_params, preprocess, name, save)
-
-    #G = dt.load_graph()
-    #nodes_to_plot = list(G.nodes())[:100]
-    #gc.plot_subgraph(G, nodes_to_plot)
-    return
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 def run_retrieval():
-    q, a, c = dt.load_data()
     small, medium, long = dt.load_samples()
     files = dt.get_files()
     all_samples = small + medium + long
@@ -241,17 +237,13 @@ def run_retrieval():
         "long": long,
         "all_samples": all_samples,
     }
-    flag = True
+    for k in k_retrive:
+        for tag, samples in sample_sets.items():
+            print(f" [baseline] tag={tag}")
+            baseline_search(samples, k, f"Outputs/Global leaderboard", tag)
     for file in files:
         graph = dt.load_graph(file)
         print(f"\n=== File: {file} ===")
-        if flag == True:
-            # --- Baseline ---
-            for k in k_retrive:
-                 for tag, samples in sample_sets.items():
-                   print(f" [baseline] tag={tag}")
-                   baseline_search(samples, k, f"graphs/{file}", tag)
-            flag = False
 
         # --- ppr_search: sweep rerankers × alphas × inits × sample sets ---
         for k in k_retrive:
@@ -259,7 +251,7 @@ def run_retrieval():
              for init in inits:
                 for tag, samples in sample_sets.items():
                     print(f"  [ppr] , init={init}, tag={tag}")
-                    personalised_pagerank_search(samples, graph, k, f"graphs/{file}", init, tag, alpha)
+                    personalised_pagerank_search(samples, graph, k, f"Outputs/graphs/{file}", init, tag, alpha)
         # --- shortest_path_search: sweep rerankers × alphas × sample sets ---
         #for alpha in alphas:
             #for init in inits:
@@ -290,38 +282,21 @@ def run_retrieval():
                        print(f"  [k_steph] reranker=BM25, alpha={alpha}, init={init}, tag={tag}")
                        k_steph_search(
                             samples, graph, "BM25", k, k_step, alpha,
-                            f"graphs/{file}", init, tag)
+                            f"Outputs/graphs/{file}", init, tag)
                        print(f"  [k_steph] reranker=graph_aware, alpha={alpha}, init={init}, tag={tag}")
                        k_steph_search(
                             samples, graph, "graph_aware", k, k_step, alpha,
-                            f"graphs/{file}", init, tag
+                            f"Outputs/graphs/{file}", init, tag
                         )
         for k in k_retrive:
           for init in inits:
             for tag, samples in sample_sets.items():
                 print(f"  [k_steph] reranker= cross_encoder, init={init}, tag={tag}")
                 k_steph_search(
-                    samples, graph, "cross_encoder", k, k_step, 0.0, f"graphs/{file}", init, tag,
+                    samples, graph, "cross_encoder", k, k_step, 0.0, f"Outputs/graphs/{file}", init, tag,
                 )
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 
 
 
-def knn_Graph(sampled_items, knn_params, preproccess, name, graph_params,save):
-    # Building a graph using knn
-    gc.build_knn_graph(sampled_items, knn_params, preproccess, name, graph_params, save)
-
-    return
-
-
-def mutual_knn(sampled_items, knn_params, preproccess, name, graph_params, save):
-    # Building a graph using mutual knn
-    gc.build_mutual_knn_graph(sampled_items, knn_params, preproccess, name, graph_params, save)
-    return
-
-
-def cluster_graph(sampled_items, kmeans_params, agglo_params, preprocess, knn_params, dbscan_params, name, clustering_result=None, flag=True,
-                  algorithm="kmeans"):
-    # Building a graph using clustering
-    return gc.build_clustering_graph(sampled_items, kmeans_params, agglo_params, knn_params, dbscan_params, preprocess, name, algorithm, clustering_result, flag)

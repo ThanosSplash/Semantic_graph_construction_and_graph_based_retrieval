@@ -21,33 +21,46 @@ def normalize(scores):
         return np.zeros_like(scores)
     return (scores - min_s) / (max_s - min_s)
 
-def get_neighbors(graph, ids, hops, current_hop=1, visited=None,  hop_map=None):
+def get_neighbors(graph, init_node, hops, current_hop=1, visited=None,  hop_map=None):
     # Function that calculates the neighbors nodes. The exploration range depends on the hops
+    """Given the semantic graph , the init node and the number of hops find the
+       neighbor nodes
+       graph: the semantic graph
+       init_node: The node where the expansion begins
+       hops: How much i expand the graph
+       visited: Set of already-visited nodes
+       hop_map: A dictionary which saves the node and when it first found
+    """
 
     if visited is None:
-        visited = set(ids)
-        hop_map = {node: 1 for node in ids}
+        # Init the visited and hop map
+        visited = set(init_node)
+        hop_map = {node: 1 for node in init_node}
 
     if hops <= 0:
         return hop_map
 
-    next_ids = set()
-
-    for node in ids:
+    neighbor_nodes = set()
+    # For every node finds it neighbor and save them in hop_map
+    for node in init_node:
         for neighbor in graph.neighbors(node):
-            next_ids.add(neighbor)
+            neighbor_nodes.add(neighbor)
             if neighbor not in hop_map:
                 hop_map[neighbor] = 1/(current_hop+1)
 
     # remove already visited nodes
-    next_ids -= visited
+    neighbor_nodes -= visited
 
-    visited.update(next_ids)
+    visited.update(neighbor_nodes)
 
-    return get_neighbors(graph, next_ids, hops - 1, current_hop + 1, visited, hop_map)
+    return get_neighbors(graph, neighbor_nodes, hops - 1, current_hop + 1, visited, hop_map)
 
 
 def get_nodes_in_shortest_paths(graph, nodes):
+    """Calculating the shortest path between some selected nodes
+       graph: The semantic graph
+       nodes: The nodes used to calculate the shortest path between
+    """
     all_path_nodes = set()
 
     for i in range(len(nodes)):
@@ -55,17 +68,23 @@ def get_nodes_in_shortest_paths(graph, nodes):
         for j in range(i + 1, len(nodes)):
             s, t = nodes[i], nodes[j]
             try:
+                # If there is a path
                 path = nx.shortest_path(graph, source=s, target=t)
                 for node in path:
                     all_path_nodes.add(node)
             except (nx.NetworkXNoPath, nx.NodeNotFound):
+                # Not connected
                 continue
 
     return list(all_path_nodes)
 
 
 def pagerank(graph, k, nodes=None):
-    # Function that calculates the top-k nodes using pagerank
+    """Perform page rank and returns the topk node with highest graph score
+       graph: The semantic graph
+       k: The number of nodes to return
+       nodes: nodes to be scored
+    """
     adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
     # Running Pagerank algorithm
     pagerank_ = PageRank()
@@ -78,6 +97,7 @@ def pagerank(graph, k, nodes=None):
         top_nodes= [node for node, score in topk_]
         return top_nodes
     else:
+        # Rank the given nodes by score and return them sorted
         topk_ = sorted(node_scores, key=lambda x: x[1], reverse=True)
         top_nodes = {node: score for node, score in topk_ if node in nodes}
         return top_nodes
@@ -116,7 +136,11 @@ def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids):
     return node_scores
 
 def sim_scores_for_query(query_id, retrieved_ids=None):
-
+    """Given the query id calculates the cosine similarity for all the documents in the corpus
+       query_id: The id of the query
+       retrieved_ids: Used when need to calculate the cosine similarity only for those documents
+    """
+    # Loading the embeddings
     q, _, c = dt.load_data()
     # Safety check
     if query_id not in q:
@@ -124,10 +148,13 @@ def sim_scores_for_query(query_id, retrieved_ids=None):
     query = q[query_id]
     query_emb = query[0].reshape(1, -1)
     query_correct_results = query[1]
+
     if retrieved_ids is None:
+        # Saving the ids and embeddings for all the documents in the corpus
         documents = list(c.keys())
         embeddings = np.vstack(list(c.values()))
     else:
+        # Saving the ids and embeddings only for the retrieved_ids
         documents = list(retrieved_ids)
         embeddings = np.vstack([c[id] for id in retrieved_ids if id in c.keys()])
 
@@ -310,21 +337,21 @@ def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, s
         hops: For the get_neighbors function. How far to expand through the graph
         alpha: Variable used to calculate the final score
         k: number of items to be retrieved
+        query_id: The id of the query
         """
     # Finding the neighbors
-    neighbors = get_neighbors(graph, init_nodes, hops) # Finding the neighbors
-    ids = list(neighbors.keys())
-    if len(ids) <= 0:
-        raise Exception(f"Neighbors not found {ids}")
+    neighbors = list(get_neighbors(graph, init_nodes, hops))
+    if len(neighbors) <= 0:
+        raise Exception(f"Neighbors not found {neighbors}")
     # Calculating similarity scores
     final_scores = []
     # Using a reranked function
     if reranker_type == "graph_aware":
-        final_scores = rerank_graph_aware(graph, query_id, ids, init_nodes, sims, alpha)
+        final_scores = rerank_graph_aware(graph, query_id, neighbors, init_nodes, sims, alpha)
     elif reranker_type == "cross_encoder":
-        final_scores = rerank_cross_encoder(query_id, ids)
+        final_scores = rerank_cross_encoder(query_id, neighbors)
     elif reranker_type == "BM25":
-        final_scores = rerank_bm25(query_id, ids, alpha)
+        final_scores = rerank_bm25(query_id, neighbors, alpha)
     # Get the topk and making two lists for the ids and the  score
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]
@@ -359,22 +386,32 @@ def hits(graph, root_set, k, max_iter=300):
     return [n for n, _ in top[:k]]
 
 
-def shortest_path(graph, query_id, important_nodes, k, alpha, sims, reranker_type):
+def shortest_path(graph, query_id, init_nodes, k, alpha, sims, reranker_type):
+    """Given the graph find the shortest path between the init_nodes and using the rerankers find the nodes with the
+    highest score
+    graph: The semantic graph
+    query_id: The id of the query
+    init_nodes: The nodes that are used in the graph_aware reranker and in the function get_nodes_in_shortest_paths to
+    calculate the shortest patch between them
+    k: number of items to be retrieved
+    alpha: Variable used to calculate the final score
+    sims: Similarities for the graph_aware reranker
+    reranker_type: Name of the reranker function to use
+    :return:
+    """
 
-    # Function that finds the shortest paths and the nodes in that path between all the important nodes
-    nodes_in_path = get_nodes_in_shortest_paths(graph, important_nodes)
-    # Calculating similarity scores
-    sim_dict, query_correct_results = sim_scores_for_query(query_id, nodes_in_path)
-    final_scores = []
-    # graph_scores = pagerank(graph, 0, ids)
-    # Calculating graph score for the important nodes using personalised pagerank
+    # Finding the nodes in the shortest path between the init_nodes
+    nodes_in_path = get_nodes_in_shortest_paths(graph, init_nodes)
+
+    # Calculating the final score based on the chosen reranker
     final_scores = []
     if reranker_type == "graph_aware":
-        final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, important_nodes, sims, alpha)
+        final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, init_nodes, sims, alpha)
     elif reranker_type == "cross_encoder":
         final_scores = rerank_cross_encoder(query_id, nodes_in_path)
     elif reranker_type == "BM25":
         final_scores = rerank_bm25(query_id, nodes_in_path, alpha)
+    # Choosing the topk and return the ids and its scores
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]
     pred_scores = [score for _, score in top_k]

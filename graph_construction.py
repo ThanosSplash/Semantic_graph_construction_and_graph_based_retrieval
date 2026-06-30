@@ -67,31 +67,41 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_para
 
     return G
 
-def run_knn(corpus, preprocess, knn_params ):
+def run_knn(data, preprocess, knn_params):
+    """Running kth nearest neighbors algorithm for gpu and cpu. This is function is used for
+    both mutual knn and knn graph construction
+    data: All the document embeddings in the corpus
+    preprocess: Preprocess parameters for scaler and pca
+    knn_params: parameters for the kth nearest neighbors algorithm
+    """
+
     try:
+        # If gpu exists
         import cuml
         from cuml.neighbors import NearestNeighbors
         is_gpu = True
     except ImportError:
+        # If doesnt gpu exist
         from sklearn.neighbors import NearestNeighbors
         print("Running on CPU using scikit-learn")
         is_gpu = False
 
+    ids = list(data.keys())
+    embeddings = np.array(list(data.values()))
+    # Preprocessing the data embeddings
+    data_pre = cl.pipeline(embeddings, scaler=preprocess["scaler"], pca=preprocess["pca"])
 
-
-    ids = list(corpus.keys())
-    embeddings = np.array(list(corpus.values()))
-    data = cl.pipeline(embeddings, scaler=preprocess["scaler"], pca=preprocess["pca"])
-    if knn_params["n_neighbors"] < len(corpus):
+    if knn_params["n_neighbors"] < len(data):
        neighbors = knn_params["n_neighbors"]
     else:
-       neighbors = len(corpus)
+        # if the embeddings are less than the n_neighbors drop the number of neighbors
+       neighbors = len(data)
     if is_gpu:
+        # If gpu perform knn in gpu
+        if hasattr(data_pre, 'astype'):
+            data_pre = data_pre.astype(np.float32)
 
-        if hasattr(data, 'astype'):
-            data = data.astype(np.float32)
-
-
+        # Safety check because the gpu knn lib doesn't have all the metrics
         allowed_gpu_metrics = ['l2', 'euclidean', 'cosine', 'correlation', 'manhattan']
         metric = knn_params["metric"] if knn_params["metric"] in allowed_gpu_metrics else 'euclidean'
 
@@ -103,7 +113,7 @@ def run_knn(corpus, preprocess, knn_params ):
         )
         print("Gpu knn")
     else:
-
+        # If only cpu exists use the sklearn libary
         nn = NearestNeighbors(
             n_neighbors=neighbors, metric=knn_params["metric"],
             algorithm=knn_params["algorithm"], radius=knn_params["radius"],
@@ -111,32 +121,38 @@ def run_knn(corpus, preprocess, knn_params ):
             metric_params=knn_params["metric_params"], n_jobs=knn_params["n_jobs"]
         )
 
-    nn.fit(data)
-    distances, indices = nn.kneighbors(data)
+    nn.fit(data_pre)
+    distances, indices = nn.kneighbors(data_pre)
     if is_gpu:
-           indices = indices.to_numpy() if hasattr(indices, 'to_numpy') else indices
-           distances = distances.to_numpy() if hasattr(distances, 'to_numpy') else distances
+         indices = indices.to_numpy() if hasattr(indices, 'to_numpy') else indices
+         distances = distances.to_numpy() if hasattr(distances, 'to_numpy') else distances
     return indices, distances, ids
 
-def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
-    # Building a graph where the edges are formed using the knn algorithm
-
-
-    if len(corpus) == 0:
+def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
+    """Function that build a semantic graph where the connections are decides using the knn
+       algorithm
+       data: All the document embeddings in the corpus
+       preprocess: Preprocess parameters for scaler and pca
+       knn_params: parameters for the kth nearest neighbors algorithm
+       name: Name of the graph
+       graph_params: The parameters of the graph
+       save: when its true save the graph when false dont save the graph
+    """
+    if len(data) == 0:
         print("Warning: empty cluster, skipping.")
         return nx.Graph()
 
-
     if graph_params["Directed"] == False:
+       # Not directed graph
        G = nx.Graph()
     else:
+        # Directed graph
        G = nx.DiGraph()
-
-    indices, distances, ids = run_knn(corpus, preprocess, knn_params)
-
-    for id in corpus:
-        G.add_node(id)
+    # Running knn and return the connections and the distances
+    indices, distances, ids = run_knn(data, preprocess, knn_params)
     # Constructing the graph
+    for id in data:
+        G.add_node(id)
     for i, neighbors in enumerate(indices):
         node_id = ids[i]
         for j, nearest in enumerate(neighbors):
@@ -145,15 +161,17 @@ def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
                     sim = 1.0 - distances[i][j]
                 elif knn_params["metric"] in ("euclidean", "minkowski", "manhattan"):
                     sim = np.exp(-distances[i][j])
-
                 if graph_params["Weighted"] == True:
+                    # Weighted graph
                     G.add_edge(node_id, ids[nearest], weight=sim)
                 else:
+                    # Not weighted graph
                     G.add_edge(node_id, ids[nearest])
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
 
     if save == True:
+        # Saving the graph
         config = {}
         config["graph_type"] = "knn graph"
         config["knn"] = knn_params
@@ -167,38 +185,51 @@ def build_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
     return G
 
 
-def build_mutual_knn_graph(corpus, knn_params, preprocess, name, graph_params, save):
-    # Building a graph where the edges are formed using the mutual knn algorithm
-    if len(corpus) == 0:
+def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, save):
+    """Function that builds a semantic graph where the connections are decides using the mutual knn
+           algorithm
+           data: All the document embeddings in the corpus
+           preprocess: Preprocess parameters for scaler and pca
+           knn_params: parameters for the kth nearest neighbors algorithm
+           name: Name of the graph
+           graph_params: The parameters of the graph
+           save: when its true save the graph when false dont save the graph
+        """
+    if len(data) == 0:
         print("Warning: empty cluster, skipping.")
         return nx.Graph()
     if graph_params["Directed"] == False:
+        # Not directed graph
         G = nx.Graph()
     else:
+        # Directed graph
         G = nx.DiGraph()
-    for id in corpus:
-        G.add_node(id)
-
-    indices, distances, ids = run_knn(corpus, preprocess, knn_params)
+    # Running knn and return the connections and the distances
+    indices, distances, ids = run_knn(data, preprocess, knn_params)
     # Constructing the graph
     d = {}
+    for id in data:
+        G.add_node(id)
     for i, neighbors in enumerate(indices):
         d[i] = (list(neighbors[1:]), distances[i][1:])
-
     for id in d.keys():
         for i, neighbor in enumerate(d[id][0]):
+            # if the two nodes are not neighbors both ways the connections doesn't happen
             if id < neighbor and neighbor in d and id in d[neighbor][0]:
                 if knn_params["metric"] == "cosine":
                     sim = 1.0 - d[id][1][i]
                 elif knn_params["metric"] in ("euclidean", "minkowski", "manhattan"):
                     sim = np.exp(-d[id][1][i])
                 if graph_params["Weighted"] == True:
+                    # Weighted graph
                     G.add_edge(ids[id], ids[neighbor], weight=sim)
                 else:
+                    # Not weighted graph
                     G.add_edge(ids[id], ids[neighbor])
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
+        # Saving the graph
         config = {}
         config["graph_type"] = "mutual knn graph"
         config["knn"] = knn_params
@@ -209,21 +240,30 @@ def build_mutual_knn_graph(corpus, knn_params, preprocess, name, graph_params, s
 
     return G
 
-def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, flag):
+def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save):
+    """Building a semantic graph using knn but the data is pre clustered using kmeans or dbscan
+       clustering_results: A dictionary with the pre clustered data and other information for the
+       clustering
+       knn_params: parameters for the kth nearest neighbors algorithm
+       graph_params: The parameters of the graph
+       save: when its true save the graph when false dont save the graph
+       name: Name of the graph
+    """
     graphs_knn = []
     # Constructing the graph
     for cluster_id in range(len(clustering_results["unique_clusters"])):
+        # For each cluster makes a graph
         cluster_nodes = {
             clustering_results["ids"][i]: clustering_results["embeddings"][i]
             for i, label in enumerate(clustering_results["clustering_labels"])
             if label == cluster_id
         }
-        graph = build_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, flag)
+        graph = build_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, save)
         if graph.number_of_nodes() > 0:
             graphs_knn.append(graph)
-
+    # Merging all the graphs in one
     knn_g = nx.compose_all(graphs_knn)
-
+    # Saving the graph and info about its construction
     config = {}
     config["clustering"] = clustering_results["clustering_params"]
     config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
@@ -236,9 +276,18 @@ def build_clustering_knn_graph(clustering_results, knn_params, graph_params, pre
     dt.save_graph(knn_g, graph_id)
     return
 def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, flag):
+    """Building a semantic graph using mutual knn but the data is pre clustered using kmeans or dbscan
+           clustering_results: A dictionary with the pre clustered data and other information for the
+           clustering
+           knn_params: parameters for the kth nearest neighbors algorithm
+           graph_params: The parameters of the graph
+           save: when its true save the graph when false dont save the graph
+           name: Name of the graph
+        """
     graphs_mutal_knn = []
     # Constructing the graph
     for cluster_id in range(len(clustering_results["unique_clusters"])):
+        # For each cluster makes a graph
         cluster_nodes = {
             clustering_results["ids"][i]: clustering_results["embeddings"][i]
             for i, label in enumerate(clustering_results["clustering_labels"])
@@ -247,8 +296,9 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
         graph =build_mutual_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, flag)
         if graph.number_of_nodes() > 0:
             graphs_mutal_knn.append(graph)
+    # Merging all the graphs in one
     mutual_knn_g = nx.compose_all(graphs_mutal_knn)
-
+    # Saving the graph and info about its construction
     config = {}
     config["clustering"] = clustering_results["clustering_params"]
     config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
@@ -261,9 +311,18 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
     dt.save_graph(mutual_knn_g, graph_id)
 
 def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, flag):
+        """Building a semantic graph using thershold method but the data is pre clustered using kmeans or dbscan
+               clustering_results: A dictionary with the pre clustered data and other information for the
+               clustering
+               knn_params: parameters for the kth nearest neighbors algorithm
+               graph_params: The parameters of the graph
+               save: when its true save the graph when false don't save the graph
+               name: Name of the graph
+        """
         graphs_threshold = []
         # Constructing the graph
         for cluster_id in range(len(clustering_results["unique_clusters"])):
+            # For each cluster makes a graph
             cluster_nodes = {
                 clustering_results["ids"][i]: clustering_results["embeddings"][i]
                 for i, label in enumerate(clustering_results["clustering_labels"])
@@ -273,8 +332,9 @@ def build_clustering_threshold_graph(clustering_results, threshold_params, graph
                                            graph_params, flag)
             if graph.number_of_nodes() > 0:
                 graphs_threshold.append(graph)
+        # Merging all the graphs in one
         threshold_g = nx.compose_all(graphs_threshold)
-
+        # Saving the graph and info about its construction
         config = {}
         config["clustering"] = clustering_results["clustering_params"]
         config["preprocess"] = (
@@ -287,72 +347,7 @@ def build_clustering_threshold_graph(clustering_results, threshold_params, graph
         dt.save_graph_data(config, graph_id, clustering_results["fig"])
         dt.save_graph(threshold_g, graph_id)
 
-def build_clustering_graph(data, kmeans_params, agglo_params, knn_params, dbscan_params, preprocess, name , graph_params, algorithm="kmeans", clustering_result=None, flag=True):
-    # Building multiples graphs using clustering
-    config = {}
-    if algorithm == "kmeans" and clustering_result == None:
-       unique_clusters, clustering_labels, ids, embeddings, fig = cl.kmeans(data, kmeans_params, agglo_params  ,scaler=preprocess["scaler"],
-                                                                    pca=preprocess["pca"], pipeline_id=kmeans_params["pipeline_id"])
-       clustering_result = {
-           "unique_clusters": unique_clusters,
-           "clustering_labels": clustering_labels,
-           "ids": ids,
-           "embeddings": embeddings,
-           "fig": fig,
-           "clustering_params": kmeans_params
-       }
-       if flag == True:
-           return clustering_result
 
-
-    elif algorithm == "dbscan" and clustering_result == None:
-       cl.dbscan(data, dbscan_params, preprocess)
-
-       return
-
-    else:
-        unique_clusters = clustering_result["unique_clusters"]
-        clustering_labels = clustering_result["clustering_labels"]
-        ids = clustering_result["ids"]
-        embeddings = clustering_result["embeddings"]
-        fig = clustering_result["fig"]
-        config = {}
-        config["kmeans"] = kmeans_params
-        config["preprocess"] = (str(preprocess["scaler"]), str(preprocess["pca"]))
-        if kmeans_params["pipeline_id"] == 1:
-            config["agglo_params"] = agglo_params
-
-
-    graphs_knn = []
-    graphs_mutual_knn = []
-    graphs_threshold = []
-    # Constructing the graph
-    for cluster_id in range(len(unique_clusters)):
-        cluster_nodes = {
-            ids[i]: embeddings[i]
-            for i, label in enumerate(clustering_labels)
-            if label == cluster_id
-        }
-        graphs_knn.append(build_knn_graph(cluster_nodes, knn_params, preprocess,"", graph_params, False))
-        graphs_mutual_knn.append(build_mutual_knn_graph(cluster_nodes, knn_params, preprocess,"", graph_params,False))
-
-
-    knn_g = nx.compose_all(graphs_knn)
-    mutual_knn_g = nx.compose_all(graphs_mutual_knn)
-
-    temp = config.copy()
-    temp["graph_type"] = "clustering knn graph"
-    temp["knn"] = knn_params
-    graph_id = name
-    dt.save_graph_data(temp, graph_id, fig)
-    dt.save_graph(knn_g, graph_id)
-
-    temp = config.copy()
-    temp["graph_type"] = "clustering mutual knn graph"
-    temp["mutual_knn"] = knn_params
-    graph_id = " mutual_" + name
-    dt.save_graph_data(temp, graph_id, fig)
-    dt.save_graph(mutual_knn_g, graph_id)
 
 
 
