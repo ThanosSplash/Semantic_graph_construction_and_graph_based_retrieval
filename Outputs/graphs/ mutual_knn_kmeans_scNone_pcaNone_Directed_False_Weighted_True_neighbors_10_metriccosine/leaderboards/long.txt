@@ -1,0 +1,19 @@
+=== LONG ===
+
+Method                                                           Recall      MRR       nDCG      MAP       
+-----------------------------------------------------------------------------------------------------------
+k-steph | k=10 | a=0.5 | reranker=BM25 | init=5                  0.5003      0.8336    0.8250    0.4661    
+k-steph | k=10 | a=0.0 | reranker=cross_encoder | init=5         0.4969      0.7998    0.7957    0.4478    
+k-steph | k=10 | reranker=BM25 | init=5                          0.4962      0.8405    0.8264    0.4661    
+k-steph | k=10 | reranker=BM25 | init=5                          0.4962      0.8405    0.8264    0.4661    
+k-steph | k=10 | a=0.4 | reranker=BM25 | init=5                  0.4962      0.8405    0.8264    0.4661    
+k-steph | k=10 | a=0.3 | reranker=BM25 | init=5                  0.4954      0.8375    0.8228    0.4651    
+PPR | k=10 | a=0.3 | init=5                                      0.4929      0.7015    0.7261    0.3768    
+PPR | k=10 | a=0.2 | init=5                                      0.4923      0.6867    0.7190    0.3713    
+PPR | k=10 | a=0.4 | init=5                                      0.4884      0.7132    0.7319    0.3794    
+PPR | k=10 | a=0.5 | init=5                                      0.4830      0.7130    0.7325    0.3806    
+k-steph | k=10 | a=0.3 | reranker=graph_aware | init=5           0.4816      0.6993    0.7216    0.3746    
+k-steph | k=10 | a=0.4 | reranker=graph_aware | init=5           0.4797      0.7108    0.7268    0.3787    
+Baseline | k=10                                                  0.4792      0.7375    0.7473    0.3860    
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=5           0.4781      0.7114    0.7299    0.3810    
+

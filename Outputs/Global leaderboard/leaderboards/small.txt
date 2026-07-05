@@ -1,0 +1,36 @@
+=== SMALL ===
+
+Method                                                           Recall      MRR       nDCG      MAP       
+Graph                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+k-steph | k=10 | a=0.0 | reranker=cross_encoder | init=5         0.5214      0.7127    0.7201    0.4556     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.0 | reranker=cross_encoder | init=5         0.5214      0.7127    0.7201    0.4556     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+k-steph | k=10 | a=0.5 | reranker=BM25 | init=5                  0.5024      0.6778    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.5 | reranker=BM25 | init=5                  0.5024      0.6778    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+k-steph | k=10 | reranker=BM25 | init=5                          0.4958      0.6801    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | reranker=BM25 | init=5                          0.4958      0.6801    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | reranker=BM25 | init=5                          0.4958      0.6801    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.4 | reranker=BM25 | init=5                  0.4958      0.6801    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.4 | reranker=BM25 | init=5                  0.4958      0.6801    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.4 | reranker=BM25 | init=5                  0.4958      0.6801    0.6936    0.4324     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.3 | reranker=BM25 | init=5                  0.4943      0.6673    0.6867    0.4260     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.3 | reranker=BM25 | init=5                  0.4943      0.6673    0.6867    0.4260     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+k-steph | k=10 | a=0.4 | reranker=graph_aware | init=5           0.4868      0.5819    0.6252    0.3497     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.4 | reranker=graph_aware | init=5           0.4868      0.5819    0.6252    0.3497     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.2 | reranker=BM25 | init=5                  0.4851      0.6682    0.6856    0.4173     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+PPR | k=10 | a=0.3 | init=5                                      0.4840      0.5833    0.6210    0.3519     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+PPR | k=10 | a=0.3 | init=5                                      0.4840      0.5833    0.6210    0.3519     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+PPR | k=10 | a=0.2 | init=5                                      0.4839      0.5785    0.6168    0.3467     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+PPR | k=10 | a=0.3 | init=5                                      0.4830      0.5808    0.6209    0.3516     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+k-steph | k=10 | a=0.3 | reranker=graph_aware | init=5           0.4819      0.5835    0.6222    0.3510     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.3 | reranker=graph_aware | init=5           0.4816      0.5810    0.6223    0.3510     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+PPR | k=10 | a=0.5 | init=5                                      0.4810      0.5860    0.6245    0.3457     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+PPR | k=10 | a=0.5 | init=5                                      0.4810      0.5866    0.6252    0.3462     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=5           0.4771      0.5862    0.6252    0.3488     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=5           0.4771      0.5868    0.6259    0.3494     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriceuclidean
+PPR | k=10 | a=0.4 | init=5                                      0.4766      0.5802    0.6194    0.3491     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+PPR | k=10 | a=0.4 | init=5                                      0.4766      0.5802    0.6194    0.3491     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine
+Baseline | k=10                                                  0.4734      0.6285    0.6512    0.3579                                                      
+PPR | k=10 | a=0.4 | init=5                                      0.4675      0.5947    0.6324    0.3561    knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_5_metriccosine
+PPR | k=10 | a=0.3 | init=5                                      0.4623      0.5949    0.6233    0.3503     mutual_knn_kmeans_scNone_pcaNone_Directed_False_Weighted_True_neighbors_20_metriccosine
+

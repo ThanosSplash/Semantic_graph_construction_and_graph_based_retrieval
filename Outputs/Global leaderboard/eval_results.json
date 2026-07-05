@@ -1,0 +1,1 @@
+{"method": "Basline", "final scores": {"recallk": 0.47883875458224556, "mrr": 0.6782949437084775, "ndcg": 0.6934505656442216, "mapk": 0.3765067723826958}, "k": 10, "sample_type": "small"}
