@@ -164,6 +164,22 @@ def sim_scores_for_query(query_id, retrieved_ids=None):
     sim_dict = dict(zip(documents, sims))
 
     return sim_dict, query_correct_results
+def bm25_scores_for_query(query_id, retrieved_ids):
+    # Loading the texts for the queries and the corpus
+    q_text, _, c_text = dt.load_texts()
+    # Safety check
+    if query_id not in q_text:
+        raise Exception(f"Id not found {query_id}")
+    query_text = q_text[query_id]
+
+    # Gathering the texts of the retrieved data
+    texts = [c_text[id] for id in retrieved_ids]
+    # Calculating the similarities and bm25 scores
+    bm25 = BM25Okapi([t.split() for t in texts])
+    bm25_scores = np.array(bm25.get_scores(query_text.split()))
+    bm25_norm = normalize(bm25_scores)
+
+    return sorted(zip(retrieved_ids, bm25_norm), key=lambda x: x[1], reverse=True)
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 """-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
@@ -198,6 +214,8 @@ def rerank_cross_encoder(query_id, retrieved_ids):
            query_id: The id of the query
            retrieved_ids: The ids that the retriever method retrieved
     """
+
+
     transformers.logging.set_verbosity_error()
     # Loading the texts for the queries and the corpus
     q_text, _, c_text = dt.load_texts()
@@ -212,14 +230,22 @@ def rerank_cross_encoder(query_id, retrieved_ids):
          cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
     # Making pairs for the cross encoder model
+    #if len(retrieved_ids) > 70:
+        #filtered_ids = bm25_scores_for_query(query_id, retrieved_ids)[:50]
+        #pairs = [(query_text, c_text[id]) for id, score in filtered_ids]
+        #scores = cross_encoder.predict(pairs, show_progress_bar=False)
+        #final_scores = sorted(
+            #zip(filtered_ids[0], scores),
+            #key=lambda x: x[1],
+            #reverse=True
+        #)
+    #else:
     pairs = [(query_text, c_text[id]) for id in retrieved_ids]
-
     scores = cross_encoder.predict(pairs, show_progress_bar=False)
-
     final_scores = sorted(
-        zip(retrieved_ids, scores),
-        key=lambda x: x[1],
-        reverse=True
+            zip(retrieved_ids, scores),
+            key=lambda x: x[1],
+            reverse=True
     )
 
     return final_scores
@@ -231,26 +257,15 @@ def rerank_bm25(query_id, retrieved_ids, alpha=0.5):
                retrieved_ids: The ids that the retriever method retrieved
                alpha: Variable used to calculate the final score
     """
-    # Loading the texts for the queries and the corpus
-    q_text, _, c_text = dt.load_texts()
-    # Safety check
-    if query_id not in q_text:
-        raise Exception(f"Id not found {query_id}")
-    query_text = q_text[query_id]
-
-    # Gathering the texts of the retrieved data
-    texts = [c_text[id] for id in retrieved_ids]
-    # Calculating the similarities and bm25 scores
-    bm25 = BM25Okapi([t.split() for t in texts])
-    bm25_scores = np.array(bm25.get_scores(query_text.split()))
+    # Calculate and Normalise the scores for cosine sim and bm25
     sim_dict, query_correct_results = sim_scores_for_query(query_id, retrieved_ids)
     sim_scores = np.array([sim_dict[id] for id in retrieved_ids])
     # Normalise the scores
-    bm25_norm = normalize(bm25_scores)
+    bm25_norm = dict(bm25_scores_for_query(query_id, retrieved_ids))
     sim_norm = normalize(sim_scores)
 
     final_scores = [
-        (node_id, alpha * sim_norm[i] + (1 - alpha) * bm25_norm[i])
+        (node_id, alpha * sim_norm[i] + (1 - alpha) * bm25_norm[node_id])
         for i, node_id in enumerate(retrieved_ids)
     ]
     final_scores.sort(key=lambda x: -x[1])

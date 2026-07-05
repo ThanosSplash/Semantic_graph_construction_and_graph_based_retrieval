@@ -355,14 +355,23 @@ if __name__ == "__main__":
         files = dt.get_files()
         file = files[10]
         all_samples = small + medium + long
+        metrics = ["recall", "rr", "ndcg", "avg_precisions"]
         k = int(input("k (int): ").strip())
         print(file)
+        eval_scores = None
+        params = None
         start_time = time.perf_counter()
         if METHOD.lower() == "baseline":
-            ex.baseline_search(small, k, f"Outputs/Global leaderboard", "small")
-            ex.baseline_search(medium, k, f"Outputs/Global leaderboard", "medium")
-            ex.baseline_search(long, k, f"Outputs/Global leaderboard", "long")
-            ex.baseline_search(all_samples, k, f"Outputs/Global leaderboard", "all_samples")
+            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                scores, p = ex.baseline_search(dataset, k, "Outputs/Global leaderboard", name)
+                if eval_scores is None:
+                    eval_scores, params = scores, p
+                else:
+                    for m in metrics:
+                        eval_scores[m] += scores[m]
+            params["sample_type"] = "all_samples"
+            ex.evaluate_method("Baseline", eval_scores, "Outputs/Global leaderboard", params)
+
         elif METHOD.lower() == "ppr":
             graph = dt.load_graph(file)
             init = int(input("init (int): ").strip())
@@ -372,10 +381,15 @@ if __name__ == "__main__":
             if alpha < 0.0 or alpha > 1.0 :
                 raise ValueError(f"Οut Οf Βounds Error: {alpha}")
 
-            ex.personalised_pagerank_search(small, graph, k, f"Outputs/graphs/{file}", init, "small", alpha)
-            ex.personalised_pagerank_search(medium, graph, k, f"Outputs/graphs/{file}", init, "medium", alpha)
-            ex.personalised_pagerank_search(long, graph, k, f"Outputs/graphs/{file}", init, "long", alpha)
-            ex.personalised_pagerank_search(all_samples, graph, k, f"Outputs/graphs/{file}", init, "all_samples", alpha)
+            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                scores, p = ex.personalised_pagerank_search(dataset, graph, k, f"Outputs/graphs/{file}", init, name, alpha)
+                if eval_scores is None:
+                    eval_scores, params = scores, p
+                else:
+                    for m in metrics:
+                        eval_scores[m] += scores[m]
+            params["sample_type"] = "all_samples"
+            ex.evaluate_method("PPR", eval_scores, f"Outputs/graphs/{file}", params)
         elif METHOD.lower() == "k steph":
             graph = dt.load_graph(file)
             init = int(input("init (int): ").strip())
@@ -390,11 +404,22 @@ if __name__ == "__main__":
             RERANKER = str(input("Choose reranker, BM25, graph_aware, cross_encoder: "))
             if RERANKER not in rerankers:
                 raise ValueError(f"Wrong reranker input {RERANKER}")
+            #, ("medium", medium), ("long", long)
+            for name, dataset in [("small", small)]:
 
-            ex.k_steph_search(small, graph, RERANKER, k, k_step, alpha,f"Outputs/graphs/{file}", init, "small")
-            ex.k_steph_search(medium, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "medium")
-            ex.k_steph_search(long, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "long")
-            ex.k_steph_search(all_samples, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "all_samples")
+                scores, p = ex.k_steph_search(dataset, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, name)
+                if eval_scores is None:
+                    eval_scores, params = scores, p
+                else:
+                    for m in metrics:
+                        eval_scores[m] += scores[m]
+            params["sample_type"] = "all_samples"
+            ex.evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
+
+            #ex.k_steph_search(small, graph, RERANKER, k, k_step, alpha,f"Outputs/graphs/{file}", init, "small")
+            #ex.k_steph_search(medium, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "medium")
+            #ex.k_steph_search(long, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "long")
+            #ex.k_steph_search(all_samples, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "all_samples")
         elif METHOD.lower() == "hits":
             ex.hits_search()
         elif METHOD.lower() == "shortest path":
@@ -411,7 +436,7 @@ if __name__ == "__main__":
             ex.shortest_path_search(small, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "small")
             ex.shortest_path_search(medium, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "medium")
             ex.shortest_path_search(long, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "long")
-            ex.shortest_path_search(all_samples, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "all_samples")
+            #ex.shortest_path_search(all_samples, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "all_samples")
         else:
             raise ValueError(f"Wrong Retrieval Method: {METHOD}")
         end_time = time.perf_counter()

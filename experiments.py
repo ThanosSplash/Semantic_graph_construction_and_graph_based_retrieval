@@ -94,6 +94,7 @@ def baseline_search(query_ids, k, results_file, sample_type):
     params["k"] = k
     params["sample_type"] = sample_type
     evaluate_method("Baseline", eval_scores, results_file, params)
+    return eval_scores, params
 
 
 def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample_type, alpha):
@@ -129,7 +130,7 @@ def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample
     params["init"] = init
     evaluate_method("PPR", eval_scores, results_file, params)
 
-    return
+    return eval_scores, params
 def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file, init, sample_type):
     rr_scores = []
     recallk_scores = []
@@ -159,7 +160,7 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
     params["init"] = init
     params["alpha"] = alpha
     evaluate_method("k-steph", eval_scores, results_file, params)
-    return
+    return eval_scores, params
 
 def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, sample_type):
     rr_scores = []
