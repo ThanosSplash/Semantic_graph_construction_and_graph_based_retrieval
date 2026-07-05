@@ -404,8 +404,7 @@ if __name__ == "__main__":
             RERANKER = str(input("Choose reranker, BM25, graph_aware, cross_encoder: "))
             if RERANKER not in rerankers:
                 raise ValueError(f"Wrong reranker input {RERANKER}")
-            #, ("medium", medium), ("long", long)
-            for name, dataset in [("small", small)]:
+            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
 
                 scores, p = ex.k_steph_search(dataset, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, name)
                 if eval_scores is None:

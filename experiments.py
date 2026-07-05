@@ -15,6 +15,7 @@ import itertools
 from copy import deepcopy
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
+import time
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
@@ -223,26 +224,32 @@ def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file
 def run_retrieval():
     small, medium, long = dt.load_samples()
     files = dt.get_files()
-    all_samples = small + medium + long
 
     # Parameter grids
     k_retrive = [10]
-    alphas = [0.3, 0.5]
+    alphas = [0.2, 0.5, 0.8]
     rerankers = ["BM25", "graph_aware", "cross_encoder"]
-    inits = [5]
-    k_step = 2
-
-    sample_sets = {
-        "small": small,
-        "medium": medium,
-        "long": long,
-        "all_samples": all_samples,
-    }
+    inits = [2 ,5, 8]
+    k_steps = [2, 3]
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    #dt.clear_eval(f"Outputs/Global leaderboard/global_eval_records.json")
     for k in k_retrive:
-        for tag, samples in sample_sets.items():
-            print(f" [baseline] tag={tag}")
-            baseline_search(samples, k, f"Outputs/Global leaderboard", tag)
+        eval_scores = None
+        params = None
+        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+            print(f" [baseline] tag={name} k={k}")
+            scores, p = baseline_search(dataset, k, "Outputs/Global leaderboard", name)
+            if eval_scores is None:
+                eval_scores, params = scores, p
+            else:
+                for m in metrics:
+                    eval_scores[m] += scores[m]
+        params["sample_type"] = "all_samples"
+        evaluate_method("Baseline", eval_scores, "Outputs/Global leaderboard", params)
+
     for file in files:
+        start_time = time.perf_counter()
+        dt.clear_eval(f"Outputs/graphs/{file}/eval_results.json")
         graph = dt.load_graph(file)
         print(f"\n=== File: {file} ===")
 
@@ -250,52 +257,71 @@ def run_retrieval():
         for k in k_retrive:
            for alpha in alphas:
              for init in inits:
-                for tag, samples in sample_sets.items():
-                    print(f"  [ppr] , init={init}, tag={tag}")
-                    personalised_pagerank_search(samples, graph, k, f"Outputs/graphs/{file}", init, tag, alpha)
-        # --- shortest_path_search: sweep rerankers × alphas × sample sets ---
-        #for alpha in alphas:
-            #for init in inits:
-                #for tag, samples in sample_sets.items():
-                    #print(f"  [shortest_path] reranker= BM25, alpha={alpha}, init = {init} ,tag={tag}")
-                    #shortest_path_search(
-                        #samples, graph, "BM25", 10, alpha,
-                       # f"graphs/{file}", init, tag
-                    #)
-                    #print(f"  [shortest_path] reranker= graph_aware, alpha={alpha}, tag={tag}")
-                   #shortest_path_search(
-                        #samples, graph, "graph_aware", 10, alpha,
-                        #f"graphs/{file}", init, tag
-                    #)
-        #for init in inits:
-            #for tag, samples in sample_sets.items():
-                #print(f"  [shortest_path] reranker= cross_encoder, init={init}, tag={tag}")
-                #shortest_path_search(
-                    #samples, graph, "cross_encoder", 10, 0.0,
-                    #f"graphs/{file}", init, tag
-                #)
+                 eval_scores = None
+                 params = None
+                 for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                     print(f"  [ppr] , init={init}, tag={name}")
+                     scores, p = personalised_pagerank_search(dataset, graph, k, f"Outputs/graphs/{file}", init,
+                                                                 name, alpha)
+                     if eval_scores is None:
+                         eval_scores, params = scores, p
+                     else:
+                         for m in metrics:
+                             eval_scores[m] += scores[m]
+                 params["sample_type"] = "all_samples"
+                 evaluate_method("PPR", eval_scores, f"Outputs/graphs/{file}", params)
 
         # --- k_steph_search: sweep rerankers × alphas × inits × sample sets ---
         for k in k_retrive:
            for alpha in alphas:
                 for init in inits:
-                    for tag, samples in sample_sets.items():
-                       print(f"  [k_steph] reranker=BM25, alpha={alpha}, init={init}, tag={tag}")
-                       k_steph_search(
-                            samples, graph, "BM25", k, k_step, alpha,
-                            f"Outputs/graphs/{file}", init, tag)
-                       print(f"  [k_steph] reranker=graph_aware, alpha={alpha}, init={init}, tag={tag}")
-                       k_steph_search(
-                            samples, graph, "graph_aware", k, k_step, alpha,
-                            f"Outputs/graphs/{file}", init, tag
-                        )
+                  for k_step in k_steps:
+                        eval_scores = None
+                        params = None
+                        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                            print(f"  [k_steph] reranker=BM25, alpha={alpha}, init={init}, tag={name}, k step={k_step}")
+                            scores, p = k_steph_search(dataset, graph, "BM25", k, k_step, alpha,
+                                                          f"Outputs/graphs/{file}", init, name)
+                            if eval_scores is None:
+                                eval_scores, params = scores, p
+                            else:
+                                for m in metrics:
+                                    eval_scores[m] += scores[m]
+                        params["sample_type"] = "all_samples"
+                        evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
+                        eval_scores = None
+                        params = None
+                        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                            print(f"  [k_steph] reranker=graph_aware, alpha={alpha}, init={init}, tag={name}, k step={k_step}")
+                            scores, p = k_steph_search(dataset, graph, "graph_aware", k, k_step, alpha,
+                                                          f"Outputs/graphs/{file}", init, name)
+                            if eval_scores is None:
+                                eval_scores, params = scores, p
+                            else:
+                                for m in metrics:
+                                    eval_scores[m] += scores[m]
+                        params["sample_type"] = "all_samples"
+                        evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
         for k in k_retrive:
           for init in inits:
-            for tag, samples in sample_sets.items():
-                print(f"  [k_steph] reranker= cross_encoder, init={init}, tag={tag}")
-                k_steph_search(
-                    samples, graph, "cross_encoder", k, k_step, 0.0, f"Outputs/graphs/{file}", init, tag,
-                )
+            for k_step in k_steps:
+                 eval_scores = None
+                 params = None
+                 for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                     print(
+                         f"  [k_steph] reranker=cross_encoder, init={init}, tag={name}, k step={k_step}")
+                     scores, p = k_steph_search(dataset, graph, "cross_encoder", k, k_step, 0.0,
+                                                f"Outputs/graphs/{file}", init, name)
+                     if eval_scores is None:
+                         eval_scores, params = scores, p
+                     else:
+                         for m in metrics:
+                             eval_scores[m] += scores[m]
+                 params["sample_type"] = "all_samples"
+                 evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
+        end_time = time.perf_counter()
+        execution_time = end_time - start_time
+        print(f"Time: {execution_time:.4f} seconds")
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 

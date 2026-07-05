@@ -13,6 +13,7 @@ import transformers
 import torch
 import time
 
+
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
 def normalize(scores):
@@ -214,38 +215,33 @@ def rerank_cross_encoder(query_id, retrieved_ids):
            query_id: The id of the query
            retrieved_ids: The ids that the retriever method retrieved
     """
-
-
-    transformers.logging.set_verbosity_error()
     # Loading the texts for the queries and the corpus
     q_text, _, c_text = dt.load_texts()
     # Safety check
     if query_id not in q_text:
         raise Exception(f"Id not found {query_id}")
     query_text = q_text[query_id]
-    # Checking if cude exists
     if torch.cuda.is_available():
-         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
+        cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device='cuda')
     else:
-         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-
+        cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    # Checking if cude exists
     # Making pairs for the cross encoder model
-    #if len(retrieved_ids) > 70:
-        #filtered_ids = bm25_scores_for_query(query_id, retrieved_ids)[:50]
-        #pairs = [(query_text, c_text[id]) for id, score in filtered_ids]
-        #scores = cross_encoder.predict(pairs, show_progress_bar=False)
-        #final_scores = sorted(
-            #zip(filtered_ids[0], scores),
-            #key=lambda x: x[1],
-            #reverse=True
-        #)
-    #else:
-    pairs = [(query_text, c_text[id]) for id in retrieved_ids]
+    if len(retrieved_ids) > 50:
+        #filtered = bm25_scores_for_query(query_id, retrieved_ids)[:80]
+        filtered = rerank_bm25(query_id, retrieved_ids)[:20]
+        ids = [node_id for node_id, _ in filtered]
+    else:
+        ids = retrieved_ids
+
+    pairs = [(query_text, c_text[i]) for i in ids]
+
     scores = cross_encoder.predict(pairs, show_progress_bar=False)
-    final_scores = sorted(
-            zip(retrieved_ids, scores),
-            key=lambda x: x[1],
-            reverse=True
+
+    return sorted(
+        zip(ids, scores),
+        key=lambda x: x[1],
+        reverse=True
     )
 
     return final_scores

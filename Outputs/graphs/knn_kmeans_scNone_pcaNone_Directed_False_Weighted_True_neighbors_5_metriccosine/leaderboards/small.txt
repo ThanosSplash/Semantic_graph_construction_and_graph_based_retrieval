@@ -3,8 +3,11 @@
 Method                                                           Recall      MRR       nDCG      MAP       
 Graph                                             
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
+k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.5191      0.7018    0.7081    0.4553                                                      
+k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.5191      0.7018    0.7081    0.4553                                                      
 k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.5167      0.6961    0.7062    0.4551                                                      
 k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.5167      0.6961    0.7062    0.4551                                                      
+k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.4982      0.6934    0.7016    0.4457                                                      
 k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.4972      0.6953    0.7028    0.4437                                                      
 k-steph | k=10 | a=0.4 | reranker=cross_encoder | init=5         0.4925      0.7056    0.7083    0.4439                                                      
 PPR | k=10 | a=0.4 | init=5                                      0.4675      0.5947    0.6324    0.3561                                                      

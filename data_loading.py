@@ -90,9 +90,11 @@ def save_eval_results(indexes, params, method, final_scores, results_file):
     if method.lower() != "baseline":
         results_file += "/eval_results.json"
     else:
+        print("global")
         results_file += "/global_eval_records.json"
     with open(results_file, "a") as f:
         f.write(json.dumps(record) + "\n")
+
 
     directory_name = "Outputs/Queries"
     os.makedirs(directory_name, exist_ok=True)
@@ -181,6 +183,14 @@ def load_samples():
 
 
 """-----------------------------------------------------------------------------Load from dataset-----------------------------------------------------------------------------"""
+def clear_eval(path):
+    if os.path.exists(path):
+        with open(path, "w") as f:
+            f.write("")
+        print(f"file {path} cleared")
+    else:
+
+        print(f"file not found: {os.path.abspath(path)}")
 
 """-----------------------------------------------------------------------------Leaderboard-----------------------------------------------------------------------------"""
 
