@@ -1,0 +1,12 @@
+{"method": "PPR", "final scores": {"recallk": 0.41221328686167563, "mrr": 0.5908193101802126, "ndcg": 0.4741435307094981, "mapk": 0.3357714370052156}, "k": 10, "alpha": 0, "sample_type": "small", "init": 2}
+{"method": "PPR", "final scores": {"recallk": 0.4364837391853682, "mrr": 0.6399928392409595, "ndcg": 0.5059344501761537, "mapk": 0.3664969315306572}, "k": 10, "alpha": 0, "sample_type": "medium", "init": 2}
+{"method": "PPR", "final scores": {"recallk": 0.45195169374382405, "mrr": 0.7148705096073517, "ndcg": 0.5669710921308367, "mapk": 0.37478344788980195}, "k": 10, "alpha": 0, "sample_type": "long", "init": 2}
+{"method": "PPR", "final scores": {"recallk": 0.43354957326362253, "mrr": 0.6485608863428411, "ndcg": 0.5156830243388288, "mapk": 0.35901727214189166}, "k": 10, "alpha": 0, "sample_type": "all_samples", "init": 2}
+{"method": "PPR", "final scores": {"recallk": 0.46251747158871626, "mrr": 0.5643065998329158, "ndcg": 0.4895540186543073, "mapk": 0.3407658297013813}, "k": 10, "alpha": 0, "sample_type": "small", "init": 5}
+{"method": "PPR", "final scores": {"recallk": 0.48078763661431, "mrr": 0.6197577276524645, "ndcg": 0.5196103704170912, "mapk": 0.37461752398897963}, "k": 10, "alpha": 0, "sample_type": "medium", "init": 5}
+{"method": "PPR", "final scores": {"recallk": 0.47252415898813016, "mrr": 0.6701127819548872, "ndcg": 0.559780119866026, "mapk": 0.35923580046968384}, "k": 10, "alpha": 0, "sample_type": "long", "init": 5}
+{"method": "PPR", "final scores": {"recallk": 0.4719430890637188, "mrr": 0.6180590364800891, "ndcg": 0.5229815029791411, "mapk": 0.358206384720015}, "k": 10, "alpha": 0, "sample_type": "all_samples", "init": 5}
+{"method": "PPR", "final scores": {"recallk": 0.482842483711608, "mrr": 0.5079693280821101, "ndcg": 0.4639972164234091, "mapk": 0.3071667543333546}, "k": 10, "alpha": 0, "sample_type": "small", "init": 10}
+{"method": "PPR", "final scores": {"recallk": 0.47342384954431965, "mrr": 0.53781179138322, "ndcg": 0.4726893942248143, "mapk": 0.3174004869445971}, "k": 10, "alpha": 0, "sample_type": "medium", "init": 10}
+{"method": "PPR", "final scores": {"recallk": 0.479779907585252, "mrr": 0.5723773720014323, "ndcg": 0.5142483392842647, "mapk": 0.3031200387154876}, "k": 10, "alpha": 0, "sample_type": "long", "init": 10}
+{"method": "PPR", "final scores": {"recallk": 0.4786820802803929, "mrr": 0.5393861638222538, "ndcg": 0.4836449833108293, "mapk": 0.3092290933311463}, "k": 10, "alpha": 0, "sample_type": "all_samples", "init": 10}
