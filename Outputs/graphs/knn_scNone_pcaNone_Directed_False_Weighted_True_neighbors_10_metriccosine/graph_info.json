@@ -12,11 +12,11 @@
           "Average Degree": 13.195594341264513,
           "Number of connected components": 2,
           "Number of communities": [
-                    82,
-                    0.87416011095047
+                    87,
+                    0.8746539950370789
           ],
           "largest_component_size": 40190,
-          "avg_clustering": 0.28239317104397743,
+          "avg_clustering": 0.2823931710439769,
           "top_degree_nodes": [
                     [
                               23463798,
@@ -51,11 +51,11 @@
                               52
                     ],
                     [
-                              11242053,
+                              17439072,
                               51
                     ],
                     [
-                              16784548,
+                              11242053,
                               51
                     ]
           ]

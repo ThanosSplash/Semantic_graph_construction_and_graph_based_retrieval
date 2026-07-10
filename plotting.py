@@ -4,11 +4,12 @@ import matplotlib.cm as cm
 import numpy as np
 import networkx as nx
 from networkx.algorithms import community
-
+import data_loading as dt
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 import retrieval as rt
 import graph_construction as gc
+import nx_parallel
 
 def plot_cluster_with_silhouette(data, data_2d, centers, n_clusters, clustering_labels):
     # Function that plots the data and the clusters in 2d and also the silhouette score of each cluster
@@ -144,7 +145,118 @@ def plot_graph(G, name):
     plt.title(name + ' Semantic Graph')
     plt.axis('off')
 
+def plot_graph_stats(info_knn,  info_mutual_knn, clustering = "", clusters = 0):
+    n_neighbors_vals = [x[0] for x in info_knn]
+    n_neighbors_vals_mutual_knn = [x[0] for x in info_mutual_knn]
 
+    n_components_vals = [x[1] for x in info_knn]
+    n_components_vals_mutual_knn = [x[1] for x in info_mutual_knn]
+
+    n_communities_vals = [x[2] for x in info_knn]
+    n_communities_vals_mutual_knn = [x[2] for x in info_mutual_knn]
+
+    density_vals = [x[3] for x in info_knn]
+    density_vals_mutual_knn = [x[3] for x in info_mutual_knn]
+
+    avg_degree_vals = [x[4] for x in info_knn]
+    avg_degree_vals_mutual_knn = [x[4] for x in info_mutual_knn]
+
+    metrics = [
+        (n_components_vals, n_components_vals_mutual_knn, "Number of Connected Components"),
+        (n_communities_vals, n_communities_vals_mutual_knn, "Number of Communities"),
+        (density_vals, density_vals_mutual_knn, "Graph Density"),
+        (avg_degree_vals, avg_degree_vals_mutual_knn, "Average Degree"),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    axes = axes.flatten()
+
+    for ax, (values, values_mutual, label) in zip(axes, metrics):
+        ax.plot(n_neighbors_vals, values, marker='o', color='g', label="knn")
+        ax.plot(n_neighbors_vals_mutual_knn, values_mutual, marker='o', color='r', label="mutual knn")
+        ax.set_xlabel("Number of Neighbors (k)")
+        ax.set_ylabel(label)
+        ax.legend()
+        if clustering == "kmeans":
+         ax.set_title(f"{label} Clustering method {clustering}, {clusters} (kNN graph) vs (mutual kNN graph)")
+        else:
+         ax.set_title(f"{label} (kNN graph) vs (mutual kNN graph)")
+        ax.grid(False)
+
+    plt.tight_layout()
+    plt.show()
+
+def getting_plot_graph_stats():
+    files = dt.get_files()
+    info_to_plot_knn = []
+    info_to_plot_mutual_knn = []
+    info_to_plot_clustering_knn = {}
+    info_to_plot_clustering_mutual_knn = {}
+
+    for file in files:
+        params, info = dt.load_graph_parameters(file)
+        if params['graph_type'] == "knn graph":
+            info_to_plot_knn.append((
+                params['knn']['n_neighbors'],
+                info['Number of connected components'],
+                info['Number of communities'][0],
+                info['Graph Density'],
+                info['Average Degree'],
+            ))
+        elif params['graph_type'] == "mutual knn graph":
+            info_to_plot_mutual_knn.append((
+                params['knn']['n_neighbors'],
+                info['Number of connected components'],
+                info['Number of communities'][0],
+                info['Graph Density'],
+                info['Average Degree'],))
+        elif params['graph_type'] == "clustering knn graph":
+            if params['clustering']['n_clusters'] not in info_to_plot_clustering_knn:
+                info_to_plot_clustering_knn[params['clustering']['n_clusters']] = [(
+                    params['Graph building algorithm params']['n_neighbors'],
+                    info['Number of connected components'],
+                    info['Number of communities'][0],
+                    info['Graph Density'],
+                    info['Average Degree'],
+                )]
+            else:
+                info_to_plot_clustering_knn[params['clustering']['n_clusters']].append((
+                    params['Graph building algorithm params']['n_neighbors'],
+                    info['Number of connected components'],
+                    info['Number of communities'][0],
+                    info['Graph Density'],
+                    info['Average Degree'],
+                ))
+        elif params['graph_type'] == "clustering mutual knn graph":
+            if params['clustering']['n_clusters'] not in info_to_plot_clustering_mutual_knn:
+                info_to_plot_clustering_mutual_knn[params['clustering']['n_clusters']] = [(
+                    params['Building graph algorithm params']['n_neighbors'],
+                    info['Number of connected components'],
+                    info['Number of communities'][0],
+                    info['Graph Density'],
+                    info['Average Degree'],
+                )]
+            else:
+                info_to_plot_clustering_mutual_knn[params['clustering']['n_clusters']].append((
+                    params['Building graph algorithm params']['n_neighbors'],
+                    info['Number of connected components'],
+                    info['Number of communities'][0],
+                    info['Graph Density'],
+                    info['Average Degree'],
+                ))
+
+    info_to_plot_knn.sort(key=lambda x: x[0])
+    info_to_plot_mutual_knn.sort(key=lambda x: x[0])
+    #info_to_plot_clustering_knn.sort(key=lambda x: x[0])
+    #info_to_plot_clustering_mutual_knn.sort(key=lambda x: x[0])
+    plot_graph_stats(info_to_plot_knn, info_to_plot_mutual_knn)
+    print(info_to_plot_clustering_knn.keys())
+    for cl in info_to_plot_clustering_knn.keys():
+      test_knn = info_to_plot_clustering_knn[cl]
+      test_knn.sort(key=lambda x: x[0])
+      test_mutual_knn = info_to_plot_clustering_mutual_knn[cl]
+      test_mutual_knn.sort(key=lambda x: x[0])
+      plot_graph_stats(test_knn, test_mutual_knn, "kmeans", cl)
 
 
 def plot_subgraph(G, nodes):
@@ -185,7 +297,6 @@ def convert(obj):
 
 def print_graph_stats(graph):
 
-
     graph_info = {}
 
     if graph.is_directed():
@@ -193,21 +304,30 @@ def print_graph_stats(graph):
     else:
         components = list(nx.connected_components(graph))
 
+    # Louvain and average_clustering only support undirected graphs
+    undirected = graph.to_undirected() if graph.is_directed() else graph
+
     graph_info["Nodes"] = graph.number_of_nodes()
     graph_info["Edges"] = graph.number_of_edges()
     graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
     graph_info["Graph Density"] = nx.density(graph)
-    graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
+
+    if graph.number_of_nodes() > 0:
+        graph_info["Average Degree"] = 2 * graph.number_of_edges() / graph.number_of_nodes()
+    else:
+        graph_info["Average Degree"] = 0
+
     graph_info["Number of connected components"] = len(components)
 
-    communities = nx.community.louvain_communities(graph, weight="weight")
-    community_list = list(communities)
-    mod = community.modularity(graph, community_list)
+    community_list = list(
+        nx.community.louvain_communities(undirected, weight="weight")
+    )
+    mod = nx.community.modularity(undirected, community_list)
     graph_info["Number of communities"] = (len(community_list), mod)
 
     graph_info = {k: convert(v) for k, v in graph_info.items()}
-    graph_info["largest_component_size"] = max(len(c) for c in components)
-    graph_info["avg_clustering"] = nx.average_clustering(graph, weight="weight")
+    graph_info["largest_component_size"] = max((len(c) for c in components), default=0)
+    graph_info["avg_clustering"] = nx.average_clustering(undirected, weight="weight")
     graph_info["top_degree_nodes"] = sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
 
     return graph_info

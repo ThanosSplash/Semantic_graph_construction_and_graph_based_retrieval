@@ -1,2 +1,0 @@
-{"method": "PPR", "final scores": {"recallk": 0.4402502474922772, "mrr": 0.5901300871225683, "ndcg": 0.6035166817148646, "mapk": 0.34287775080690996}, "k": 10, "alpha": 0.2, "sample_type": "small", "init": 2}
-{"method": "PPR", "final scores": {"recallk": 0.48141440096769406, "mrr": 0.6397869674185463, "ndcg": 0.6631260424678331, "mapk": 0.37797915175226615}, "k": 10, "alpha": 0.2, "sample_type": "medium", "init": 2}

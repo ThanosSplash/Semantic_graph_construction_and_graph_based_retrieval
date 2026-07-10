@@ -14,6 +14,7 @@ import torch
 import time
 
 
+
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
 def normalize(scores):
@@ -227,6 +228,7 @@ def rerank_cross_encoder(query_id, retrieved_ids):
         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
     # Checking if cude exists
     # Making pairs for the cross encoder model
+    #if len(retrieved_ids) > 50:
     if len(retrieved_ids) > 50:
         #filtered = bm25_scores_for_query(query_id, retrieved_ids)[:80]
         filtered = rerank_bm25(query_id, retrieved_ids)[:20]
@@ -295,8 +297,51 @@ def top_k(query_id, k):
 
    return pred_results, query_correct_results, pred_sim
 
+def personalised_pagerank_multi_graph(graph, adjacency, node_to_idx, global_node_list,
+                                       init_nodes, sims, k, query_id, alpha, damping=0.85):
+    # 1. Fast Vectorized Personalization Mapping
+    valid_indices = []
+    valid_scores = []
+    for node_id, sim in zip(init_nodes, sims):
+        if node_id in node_to_idx:
+            valid_indices.append(node_to_idx[node_id])
+            valid_scores.append(sim)
 
-def personalised_pagerank(graph, init_nodes, sims, k, query_id, alpha):
+    total = sum(valid_scores)
+    if total == 0 or not valid_indices:
+        raise Exception("Zero valid ids")
+
+    weights = {idx: score / total for idx, score in zip(valid_indices, valid_scores)}
+
+    # 2. Build nx graph from adjacency and run PageRank on GPU backend
+    G = nx.from_scipy_sparse_array(adjacency, create_using=nx.DiGraph)
+    scores_personal_dict = nx.pagerank(
+        G,
+        alpha=damping,
+        personalization=weights,
+        dangling=weights,
+        backend="cugraph",
+    )
+    scores_personal = np.array([scores_personal_dict[i] for i in range(len(global_node_list))])
+
+    # 3. Vectorized Similarity Fetching
+    sim_dict, _ = sim_scores_for_query(query_id)
+    sim_array = np.array([sim_dict[node] for node in global_node_list])
+
+    # 4. Vectorized Math (C-speed)
+    final_scores_array = alpha * sim_array + (1 - alpha) * scores_personal
+
+    # 5. Fast Top-K extraction using argpartition
+    if k >= len(final_scores_array):
+        top_k_indices = np.argsort(-final_scores_array)
+    else:
+        top_k_indices = np.argpartition(-final_scores_array, k)[:k]
+        top_k_indices = top_k_indices[np.argsort(-final_scores_array[top_k_indices])]
+
+    result_nodes = [global_node_list[idx] for idx in top_k_indices]
+    return result_nodes
+
+def personalised_pagerank(graph, init_nodes, sims, k, query_id, alpha, name):
     """Given the init ids using the personalised pagerank algorithm
         to calculate the graph score for every node in the graph
         retrieve the topk nodes with the highest score
@@ -307,34 +352,36 @@ def personalised_pagerank(graph, init_nodes, sims, k, query_id, alpha):
     alpha: Variable used to calculate the final score
     k: number of items to be retrieved
     """
+    start_time = time.perf_counter()
     # Making the adjacency matrix and calculating the weights for the init nodes
-    node_to_idx = {node: idx for idx, node in enumerate(graph.nodes())}
-    adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
+    graph_cache = dt.load_graph_cache(name)
     # Safety check
-    valid = [(node_id, sims[i]) for i, node_id in enumerate(init_nodes) if node_id in node_to_idx]
+    valid = [(node_id, sims[i]) for i, node_id in enumerate(init_nodes) if node_id in graph_cache['node_to_idx']]
     total = sum(score for _, score in valid)
     if total == 0 or len(valid) == 0:
         raise Exception("Zero valid ids")
 
    # Build personalization vector: normalize similarities as seed weights
     weights = {
-        node_to_idx[node_id]: sim / total
+        graph_cache['node_to_idx'][node_id]: sim / total
         for node_id, sim in valid
     }
 
     # Running Pagerank algorithm
     pagerank = PageRank()
-
     # Calculating the graph score and similarity score for all the nodes
-    scores_personal = pagerank.fit_predict(adjacency, weights)
+    scores_personal = pagerank.fit_predict(graph_cache['adjacency'], weights)
     graph_scores = dict(zip(graph.nodes(), scores_personal))
     sim_dict, query_correct_results = sim_scores_for_query(query_id)
     final_scores = []
     for node_id in graph.nodes:
-        score = alpha * sim_dict[node_id] + (1 - alpha) * graph_scores[node_id]
-        final_scores.append((node_id, score))
+            score = alpha * sim_dict[node_id] + (1 - alpha) * graph_scores[node_id]
+            final_scores.append((node_id, score))
     # Sorting based on final score and taking the topk
     final_scores.sort(key=lambda x: -x[1])
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Time: {execution_time:.4f} seconds")
     return [node for node, _ in final_scores[:k]]
 
 

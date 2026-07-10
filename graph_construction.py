@@ -15,7 +15,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from datetime import datetime
 import uuid
 
-
+import nx_parallel
 def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_params, save):
     if len(corpus) == 0:
         print("Warning: empty cluster, skipping.")
@@ -151,8 +151,6 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
     # Running knn and return the connections and the distances
     indices, distances, ids = run_knn(data, preprocess, knn_params)
     # Constructing the graph
-    for id in data:
-        G.add_node(id)
     for i, neighbors in enumerate(indices):
         node_id = ids[i]
         for j, nearest in enumerate(neighbors):
@@ -208,8 +206,6 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
     indices, distances, ids = run_knn(data, preprocess, knn_params)
     # Constructing the graph
     d = {}
-    for id in data:
-        G.add_node(id)
     for i, neighbors in enumerate(indices):
         d[i] = (list(neighbors[1:]), distances[i][1:])
     for id in d.keys():
@@ -275,7 +271,7 @@ def build_clustering_knn_graph(clustering_results, knn_params, graph_params, pre
     dt.save_graph_data(config, graph_id, clustering_results["fig"])
     dt.save_graph(knn_g, graph_id)
     return
-def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, flag):
+def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save):
     """Building a semantic graph using mutual knn but the data is pre clustered using kmeans or dbscan
            clustering_results: A dictionary with the pre clustered data and other information for the
            clustering
@@ -293,7 +289,7 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
             for i, label in enumerate(clustering_results["clustering_labels"])
             if label == cluster_id
         }
-        graph =build_mutual_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, flag)
+        graph =build_mutual_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, save)
         if graph.number_of_nodes() > 0:
             graphs_mutal_knn.append(graph)
     # Merging all the graphs in one
@@ -306,11 +302,11 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
     config["Building graph algorithm params"] = knn_params
     config["graph_params"] = graph_params
     config["Graph building algorithm"] = "MUTUAL KNN"
-    graph_id = " mutual_" + name
+    graph_id = "mutual_" + name
     dt.save_graph_data(config, graph_id, clustering_results["fig"])
     dt.save_graph(mutual_knn_g, graph_id)
 
-def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, flag):
+def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, save):
         """Building a semantic graph using thershold method but the data is pre clustered using kmeans or dbscan
                clustering_results: A dictionary with the pre clustered data and other information for the
                clustering
@@ -329,7 +325,7 @@ def build_clustering_threshold_graph(clustering_results, threshold_params, graph
                 if label == cluster_id
             }
             graph = build_threshold_graph(cluster_nodes, threshold_params, clustering_results["preprocess"], "",
-                                           graph_params, flag)
+                                           graph_params, save)
             if graph.number_of_nodes() > 0:
                 graphs_threshold.append(graph)
         # Merging all the graphs in one

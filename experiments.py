@@ -16,6 +16,7 @@ from copy import deepcopy
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
 import time
+from tqdm import tqdm
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
@@ -98,19 +99,23 @@ def baseline_search(query_ids, k, results_file, sample_type):
     return eval_scores, params
 
 
-def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample_type, alpha):
+def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample_type, alpha, file_name):
     # Function that retrieves data from a graph using personalised pagerank and evaluates the results
+    from joblib import Parallel, delayed
+    from scipy.sparse import csr_matrix
     rr_scores = []
     recallk_scores = []
     ndcg_scores = []
     avg_precisions = []
     eval_scores = {}
     params = {}
+    graph_cache = dt.load_graph_cache(file_name)
+    adjacency = csr_matrix(graph_cache['adjacency'])
     for query_id in query_ids:
         # For each query calculates the top-k
         imporant_nodes, correct, sims = rt.top_k(query_id, init)
         # Running personalised pagerank
-        predictions = rt.personalised_pagerank(graph, imporant_nodes, sims, k, query_id, alpha)
+        predictions = rt.personalised_pagerank_multi_graph(graph, adjacency, graph_cache['node_to_idx'], graph_cache['global_node_list'],imporant_nodes, sims, k, query_id, alpha)
         # print(predictions)
         # print(correct)
         # print("---------------")
@@ -221,37 +226,22 @@ def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file
     return
 """-------------------------------------------------------------Search-------------------------------------------------------------"""
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
-def run_retrieval():
+def run_retrieval_ppr():
     small, medium, long = dt.load_samples()
     files = dt.get_files()
 
     # Parameter grids
     k_retrive = [10]
-    alphas = [0.2, 0.5, 0.8]
-    rerankers = ["BM25", "graph_aware", "cross_encoder"]
-    inits = [2 ,5, 8]
-    k_steps = [2, 3]
+    alphas = [0 ,0.2, 0.5, 0.8]
+    inits = [2, 5, 10, 20, 50]
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
-    #dt.clear_eval(f"Outputs/Global leaderboard/global_eval_records.json")
-    for k in k_retrive:
-        eval_scores = None
-        params = None
-        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-            print(f" [baseline] tag={name} k={k}")
-            scores, p = baseline_search(dataset, k, "Outputs/Global leaderboard", name)
-            if eval_scores is None:
-                eval_scores, params = scores, p
-            else:
-                for m in metrics:
-                    eval_scores[m] += scores[m]
-        params["sample_type"] = "all_samples"
-        evaluate_method("Baseline", eval_scores, "Outputs/Global leaderboard", params)
-
-    for file in files:
+    indx = 0
+    for i in tqdm(range(len(files))):
+        file = files[i]
         start_time = time.perf_counter()
         dt.clear_eval(f"Outputs/graphs/{file}/eval_results.json")
         graph = dt.load_graph(file)
-        print(f"\n=== File: {file} ===")
+        #print(f"\n=== File: {file} ===")
 
         # --- ppr_search: sweep rerankers × alphas × inits × sample sets ---
         for k in k_retrive:
@@ -259,10 +249,11 @@ def run_retrieval():
              for init in inits:
                  eval_scores = None
                  params = None
+                 start_time = time.perf_counter()
                  for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                     print(f"  [ppr] , init={init}, tag={name}")
+                     #print(f"  [ppr] , init={init}, tag={name}")
                      scores, p = personalised_pagerank_search(dataset, graph, k, f"Outputs/graphs/{file}", init,
-                                                                 name, alpha)
+                                                                 name, alpha, file)
                      if eval_scores is None:
                          eval_scores, params = scores, p
                      else:
@@ -270,18 +261,39 @@ def run_retrieval():
                              eval_scores[m] += scores[m]
                  params["sample_type"] = "all_samples"
                  evaluate_method("PPR", eval_scores, f"Outputs/graphs/{file}", params)
+                 end_time = time.perf_counter()
+                 execution_time = end_time - start_time
+                 print(f"Time: {execution_time/60:.4f} min")
+        dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        indx+=1
 
+def run_retrieval_k_steph():
+    small, medium, long = dt.load_samples()
+    files = dt.get_files()
+
+    # Parameter grids
+    k_retrive = [10]
+    alphas = [0.2, 0.5, 0.8]
+    inits = [2, 5, 8]
+    k_steps = [2, 3]
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    start_time = time.perf_counter()
+    for file in files:
+        start_time = time.perf_counter()
+        dt.clear_eval(f"Outputs/graphs/{file}/eval_results.json")
+        graph = dt.load_graph(file)
+        print(f"\n=== File: {file} ===")
         # --- k_steph_search: sweep rerankers × alphas × inits × sample sets ---
         for k in k_retrive:
-           for alpha in alphas:
+            for alpha in alphas:
                 for init in inits:
-                  for k_step in k_steps:
+                    for k_step in k_steps:
                         eval_scores = None
                         params = None
                         for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
                             print(f"  [k_steph] reranker=BM25, alpha={alpha}, init={init}, tag={name}, k step={k_step}")
                             scores, p = k_steph_search(dataset, graph, "BM25", k, k_step, alpha,
-                                                          f"Outputs/graphs/{file}", init, name)
+                                                       f"Outputs/graphs/{file}", init, name)
                             if eval_scores is None:
                                 eval_scores, params = scores, p
                             else:
@@ -292,9 +304,10 @@ def run_retrieval():
                         eval_scores = None
                         params = None
                         for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                            print(f"  [k_steph] reranker=graph_aware, alpha={alpha}, init={init}, tag={name}, k step={k_step}")
+                            print(
+                                f"  [k_steph] reranker=graph_aware, alpha={alpha}, init={init}, tag={name}, k step={k_step}")
                             scores, p = k_steph_search(dataset, graph, "graph_aware", k, k_step, alpha,
-                                                          f"Outputs/graphs/{file}", init, name)
+                                                       f"Outputs/graphs/{file}", init, name)
                             if eval_scores is None:
                                 eval_scores, params = scores, p
                             else:
@@ -303,26 +316,27 @@ def run_retrieval():
                         params["sample_type"] = "all_samples"
                         evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
         for k in k_retrive:
-          for init in inits:
-            for k_step in k_steps:
-                 eval_scores = None
-                 params = None
-                 for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                     print(
-                         f"  [k_steph] reranker=cross_encoder, init={init}, tag={name}, k step={k_step}")
-                     scores, p = k_steph_search(dataset, graph, "cross_encoder", k, k_step, 0.0,
-                                                f"Outputs/graphs/{file}", init, name)
-                     if eval_scores is None:
-                         eval_scores, params = scores, p
-                     else:
-                         for m in metrics:
-                             eval_scores[m] += scores[m]
-                 params["sample_type"] = "all_samples"
-                 evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
-        end_time = time.perf_counter()
-        execution_time = end_time - start_time
-        print(f"Time: {execution_time:.4f} seconds")
+            for init in inits:
+                for k_step in k_steps:
+                    eval_scores = None
+                    params = None
+                    for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                        print(
+                            f"  [k_steph] reranker=cross_encoder, init={init}, tag={name}, k step={k_step}")
+                        scores, p = k_steph_search(dataset, graph, "cross_encoder", k, k_step, 0.0,
+                                                   f"Outputs/graphs/{file}", init, name)
+                        if eval_scores is None:
+                            eval_scores, params = scores, p
+                        else:
+                            for m in metrics:
+                                eval_scores[m] += scores[m]
+                    params["sample_type"] = "all_samples"
+                    evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Time: {execution_time:.4f} seconds")
+
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 
 

@@ -57,9 +57,26 @@ def save_samples(small, medium, long):
 """-----------------------------------------------------------------------------Graph Related-----------------------------------------------------------------------------"""
 def save_graph(G, name):
     directory_name = f"Outputs/graphs/{name}/graph.gpickle"
+    node_list = list(G.nodes())  # 1. Build the global list
+
+    cache_obj = {
+        # 1. The list preserves the exact order of the matrix rows/columns
+        "global_node_list": node_list,
+
+        # 2. The dictionary maps Node ID -> Matrix Index Position
+        "node_to_idx": {node: idx for idx, node in enumerate(node_list)},
+
+        # 3. The sparse matrix stores the edges using those Index Positions
+        "adjacency": nx.to_scipy_sparse_array(G, format='csr')
+    }
 
     with open(directory_name, "wb") as f:
         pickle.dump(G, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    directory_name = f"Outputs/graphs/{name}/graph_cache.pkl"
+    with open(directory_name, "wb") as f:
+        pickle.dump(cache_obj, f, protocol=pickle.HIGHEST_PROTOCOL)
+
     directory_name = f"Outputs/graphs/{name}/graph_info.json"
     graph_info = plotting.print_graph_stats(G)
 
@@ -137,6 +154,20 @@ def load_graph(name):
         G = pickle.load(f)
 
     return G
+def load_graph_cache(name):
+    directory_name = f"Outputs/graphs/{name}/graph_cache.pkl"
+    with open(directory_name, "rb") as f:
+        graph_cache = pickle.load(f)
+    return graph_cache
+def load_graph_parameters(name):
+    directory_name = f"Outputs/graphs/{name}/graph_parameters.json"
+    with open(directory_name, "r", encoding="utf-8") as f:
+        params = json.load(f)
+    directory_name = f"Outputs/graphs/{name}/graph_info.json"
+    with open(directory_name, "r", encoding="utf-8") as f:
+        info = json.load(f)
+    return params, info
+
 
 def get_files():
     directory_name = "Outputs/graphs"
@@ -191,6 +222,29 @@ def clear_eval(path):
     else:
 
         print(f"file not found: {os.path.abspath(path)}")
+
+def graph_perf(file):
+    # Opening the queries json file
+    path = f"Outputs/Queries/queries.json"
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    # Turn the json file into the dataframe
+    rows = []
+    for query_id_str, entry in data.items():
+        query_id = entry.get("query_id", query_id_str)
+        for result in entry.get("results", []):
+            row = {"query_id": query_id}
+            row.update(result)
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    # Find all the entries for the specific file (method) and sort it based on rank
+    model = f"Outputs/graphs/{file}/eval_results.json"
+    ny_rows = df[df['model'] == model].drop('model', axis=1)
+    sorted_df = ny_rows.sort_values(by='recall', ascending=False)
+    print(sorted_df)
+    return sorted_df
+
+
 
 """-----------------------------------------------------------------------------Leaderboard-----------------------------------------------------------------------------"""
 

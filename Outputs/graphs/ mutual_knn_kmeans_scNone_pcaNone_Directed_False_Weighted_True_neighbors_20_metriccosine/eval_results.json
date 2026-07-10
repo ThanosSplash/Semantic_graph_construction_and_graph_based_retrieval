@@ -1,4 +1,0 @@
-{"method": "PPR", "final scores": {"recallk": 0.4623217096591868, "mrr": 0.5948711063372718, "ndcg": 0.6233306599085806, "mapk": 0.35025317046687937}, "k": 10, "alpha": 0.3, "sample_type": "small", "init": 5}
-{"method": "PPR", "final scores": {"recallk": 0.5037383682503579, "mrr": 0.6617973505191549, "ndcg": 0.6839757133810169, "mapk": 0.3959437203772479}, "k": 10, "alpha": 0.3, "sample_type": "medium", "init": 5}
-{"method": "PPR", "final scores": {"recallk": 0.4792886253978175, "mrr": 0.7242869077455544, "ndcg": 0.7338453147312657, "mapk": 0.3824244383153307}, "k": 10, "alpha": 0.3, "sample_type": "long", "init": 5}
-{"method": "PPR", "final scores": {"recallk": 0.4817829011024539, "mrr": 0.6603184548673272, "ndcg": 0.6803838960069545, "mapk": 0.37620710971981913}, "k": 10, "alpha": 0.3, "sample_type": "all_samples", "init": 5}

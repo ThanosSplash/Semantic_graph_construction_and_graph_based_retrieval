@@ -1,17 +1,16 @@
 from sklearn.metrics import ndcg_score
 import numpy as np
 import math as m
-def dcg_score(y_true, k, gains = "linear"):
+def dcg_score(y_true,  gains = "linear"):
     """ Function that calculates dcg and idcg score
         y_true: The prediction in binary form
         k: The k to take into account
     """
-    rels = y_true[:k]
     # Calculating gains
     if gains == "exp":
-        gains = 2**rels - 1
+        gains = 2**y_true - 1
     elif gains == "linear":
-        gains = rels
+        gains = y_true
     else:
         raise ValueError("Invalid gains option.")
     # Calculating discounts
@@ -27,16 +26,18 @@ def nDCGk_score(predictions, ground_truth, k, gains="linear"):
     ground_truth: The correct results
     k: The k predictions to take into account
     """
+    correct_set = set(ground_truth)
     # Binary scores
-    y_true = [1 if id in ground_truth else 0 for id in predictions]
+    y_true = [1 if id in ground_truth else 0 for id in predictions[:k]]
     if 1 not in y_true:
         return 0
     # Calculating dcg
-    dcg = dcg_score(y_true, k, gains)
+    dcg = dcg_score(y_true, gains)
     # Ideal binary scores
-    y_true.sort(reverse=True)
+    ideal_len = min(len(correct_set), k)
+    ideal_y_true = np.ones(ideal_len)
     # Calculating idcg
-    idcg = dcg_score(y_true, k, gains)
+    idcg = dcg_score(ideal_y_true, gains)
     return dcg / idcg
 
 def recallk_score(predictions, correct_results, k):
