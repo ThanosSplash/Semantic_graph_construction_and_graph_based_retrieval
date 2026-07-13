@@ -10,6 +10,7 @@ from sklearn.neighbors import NearestNeighbors
 import retrieval as rt
 import graph_construction as gc
 import nx_parallel
+import igraph as ig
 
 def plot_cluster_with_silhouette(data, data_2d, centers, n_clusters, clustering_labels):
     # Function that plots the data and the clusters in 2d and also the silhouette score of each cluster
@@ -257,6 +258,150 @@ def getting_plot_graph_stats():
       test_mutual_knn = info_to_plot_clustering_mutual_knn[cl]
       test_mutual_knn.sort(key=lambda x: x[0])
       plot_graph_stats(test_knn, test_mutual_knn, "kmeans", cl)
+
+def eval_re(eval_results, sample_type):
+    dataset = [(entry['final scores']['recallk'], entry['final scores']['mrr'],
+                entry['final scores']['ndcg'], entry['final scores']['mapk'], entry['k'], entry['alpha'], entry['init']) for entry in eval_results if entry['sample_type'] == sample_type]
+    dataset.sort(key=lambda x: x[0], reverse=True)
+    return dataset
+def plot_eval_results(info_knn,  info_mutual_knn, sample_type):
+
+    recall_vals =  [x[0][0][0] for x in info_knn[sample_type]]
+    recall_vals_mutual_knn = [x[0][0][0] for x in info_mutual_knn[sample_type]]
+
+    mrr_vals = [x[0][0][1] for x in  info_knn[sample_type]]
+    mrr_vals_mutual_knn = [x[0][0][1] for x in info_mutual_knn[sample_type]]
+
+    ndcg_vals = [x[0][0][2] for x in info_knn[sample_type]]
+    ndcg_vals_mutual_knn = [x[0][0][2] for x in info_mutual_knn[sample_type]]
+
+    map_vals = [x[0][0][3] for x in info_knn[sample_type]]
+    map_vals_mutual_knn = [x[0][0][3] for x in info_mutual_knn[sample_type]]
+
+    k_vals = [x[1]['knn']['n_neighbors'] for x in info_knn[sample_type]]
+    k_vals_mutual_knn = [x[1]['knn']['n_neighbors'] for x in info_mutual_knn[sample_type]]
+
+    metrics = [
+        (recall_vals, recall_vals_mutual_knn, "recall"),
+        (mrr_vals, mrr_vals_mutual_knn, "mrr"),
+        (ndcg_vals, ndcg_vals_mutual_knn, "ndcg"),
+        (map_vals, map_vals_mutual_knn, "map"),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    axes = axes.flatten()
+
+    for ax, (values, values_mutual, label) in zip(axes, metrics):
+        ax.plot(k_vals, values, marker='o', color='g', label="knn")
+        ax.plot(k_vals_mutual_knn, values_mutual, marker='o', color='r', label="mutual knn")
+        ax.set_xlabel("Number of Neighbors (k)")
+        ax.set_ylabel(label)
+        ax.legend()
+        ax.set_title(f"{label} (kNN graph) vs (mutual kNN graph)")
+        ax.grid(False)
+
+    plt.tight_layout()
+    plt.show()
+def plot_eval_results_of_a_graph(info):
+    results = info[0]
+
+    init_groups = {}
+    for entry in results:
+        init_val = entry[6]
+        init_groups.setdefault(init_val, []).append(entry)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    for init_val, group in sorted(init_groups.items()):
+        group_sorted = sorted(group, key=lambda x: x[5])
+        alphas = [x[5] for x in group_sorted]
+        recalls = [x[0] for x in group_sorted]
+        ax.plot(alphas, recalls, marker='o', label=f"init={init_val}")
+
+    ax.set_xlabel("Alpha")
+    ax.set_ylabel("Recall")
+    ax.set_title(f"Recall vs Alpha for different init values\n({info[2]})")
+    ax.legend()
+    ax.grid(False)
+
+    plt.tight_layout()
+    plt.show()
+
+    alpha_groups = {}
+    for entry in results:
+        alpha_val = entry[5]
+        alpha_groups.setdefault(alpha_val, []).append(entry)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    for alpha_val, group in sorted(alpha_groups.items()):
+        group_sorted = sorted(group, key=lambda x: x[6])
+        init = [x[6] for x in group_sorted]
+        recalls = [x[0] for x in group_sorted]
+        ax.plot(init, recalls, marker='o', label=f"alpha={alpha_val}")
+
+    ax.set_xlabel("Alpha")
+    ax.set_ylabel("Recall")
+    ax.set_title(f"Recall vs Alpha for different init values\n({info[2]})")
+    ax.legend()
+    ax.grid(False)
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+def getting_plot_retrieval_stats():
+    files = dt.get_files()
+    info_to_plot_knn = {}
+    info_to_plot_knn['small'] = []
+    info_to_plot_knn['medium'] = []
+    info_to_plot_knn['long'] = []
+    info_to_plot_knn['all_samples'] = []
+    info_to_plot_mutual_knn = {}
+    info_to_plot_mutual_knn['small'] = []
+    info_to_plot_mutual_knn['medium'] = []
+    info_to_plot_mutual_knn['long'] = []
+    info_to_plot_mutual_knn['all_samples'] = []
+    for file in files:
+        eval_results = dt.load_eval_results(file)
+        params, info = dt.load_graph_parameters(file)
+        if params['graph_type'] == "knn graph":
+            print(file)
+            info_to_plot_knn['small'].append((eval_re(eval_results, 'small'), params, file))
+            info_to_plot_knn['medium'].append((eval_re(eval_results, 'medium'), params, file))
+            info_to_plot_knn['long'].append((eval_re(eval_results, 'long'), params, file))
+            info_to_plot_knn['all_samples'].append((eval_re(eval_results, 'all_samples'), params, file))
+
+        elif params['graph_type'] == "mutual knn graph":
+            info_to_plot_mutual_knn['small'].append((eval_re(eval_results, 'small'), params, file))
+            info_to_plot_mutual_knn['medium'].append((eval_re(eval_results, 'medium'), params, file))
+            info_to_plot_mutual_knn['long'].append((eval_re(eval_results, 'long'), params, file))
+            info_to_plot_mutual_knn['all_samples'].append((eval_re(eval_results, 'all_samples'), params, file))
+
+
+    plot_eval_results_of_a_graph(info_to_plot_knn['small'][0])
+    plot_eval_results_of_a_graph(info_to_plot_knn['medium'][0])
+    plot_eval_results_of_a_graph(info_to_plot_knn['long'][0])
+    plot_eval_results_of_a_graph(info_to_plot_knn['all_samples'][0])
+    #print(info_to_plot_knn['small'][0][1]['knn']['n_neighbors'])
+    #info_to_plot_knn['small'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #info_to_plot_knn['medium'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #info_to_plot_knn['long'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #info_to_plot_knn['all_samples'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+
+    #info_to_plot_mutual_knn['small'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #info_to_plot_mutual_knn['medium'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #info_to_plot_mutual_knn['long'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #info_to_plot_mutual_knn['all_samples'].sort(key=lambda x: x[1]['knn']['n_neighbors'])
+    #plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, "small")
+    #plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, "medium")
+    #plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, "long")
+    #plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, "all_samples")
+
+
+
+
 
 
 def plot_subgraph(G, nodes):

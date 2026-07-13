@@ -151,6 +151,8 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
     # Running knn and return the connections and the distances
     indices, distances, ids = run_knn(data, preprocess, knn_params)
     # Constructing the graph
+    for id in data:
+        G.add_node(id)
     for i, neighbors in enumerate(indices):
         node_id = ids[i]
         for j, nearest in enumerate(neighbors):
@@ -206,6 +208,8 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
     indices, distances, ids = run_knn(data, preprocess, knn_params)
     # Constructing the graph
     d = {}
+    for id in data:
+        G.add_node(id)
     for i, neighbors in enumerate(indices):
         d[i] = (list(neighbors[1:]), distances[i][1:])
     for id in d.keys():

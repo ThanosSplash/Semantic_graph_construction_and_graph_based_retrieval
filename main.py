@@ -30,7 +30,7 @@ knn_grid = {
     "metric":      ["cosine"]
 }
 threshold_grid = {
-    "threshold_distance": [0.3, 0,4, 0.5, 0.6]
+    "threshold_distance": [0.5, 0.6]
 
 }
 
@@ -158,18 +158,18 @@ def make_graphs(c):
             #gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
             #results.append(("threshold", name, threshold_combo, preprocess))
         # ── kmeans clustering ───────────────────────────────────────────────────────
-        #for kmeans_combo in grid_combinations(kmeans_grid):
-            #kmeans_params = merge(BASE_KMEANS, kmeans_combo)
-            #clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
-                 #                                      agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            #for knn_combo in grid_combinations(knn_grid):
-                #knn_params = merge(BASE_KNN, knn_combo)
+        for kmeans_combo in grid_combinations(kmeans_grid):
+            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
+            for knn_combo in grid_combinations(knn_grid):
+                knn_params = merge(BASE_KNN, knn_combo)
 
-                #name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
-                #gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
-                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                  #                                   False)
-                #count += 2
+                name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
+                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
+                                                     False)
+                count += 2
         #for kmeans_combo in grid_combinations(kmeans_grid):
             #kmeans_params = merge(BASE_KMEANS, kmeans_combo)
             #clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
@@ -287,7 +287,7 @@ def make_query_samples():
         query_labels[qid] = label
 
     print(len(query_labels.keys()))
-    total_sample = int(len(query_labels) * 0.1)
+    total_sample = int(len(query_labels) * 0.02)
     each_label_size = total_sample // 3
     print(each_label_size)
     small_queries = []
@@ -360,7 +360,7 @@ if __name__ == "__main__":
 
 
     MODE = str(input("Choose Mode, Make graphs, Run eval tests, Make a test graph, Run a test retrieval, "
-                     "Run retrieval, Make embeddings, Make Global leaderboard, Graph performance, plot graph stats: "))
+                     "Run retrieval, Make embeddings, Make Global leaderboard, Graph performance, plot graph stats, make query samples: "))
 
 
     #MODE = ""
@@ -385,12 +385,13 @@ if __name__ == "__main__":
         GRAPH_NAME = input("Graph name: ").strip()
         dt.graph_perf(GRAPH_NAME)
     elif MODE.lower() == "plot graph stats":
-        pt.getting_plot_graph_stats()
+        pt.getting_plot_retrieval_stats()
+        #pt.getting_plot_graph_stats()
     elif MODE.lower() == "run a test retrieval":
         METHOD = input("Choose method, Baseline, PPR, K steph, Hits, Shortest Path: ").strip()
         small, medium, long = dt.load_samples()
         files = dt.get_files()
-        file = files[2]
+        file = 'mutual_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine'
         all_samples = small + medium + long
         metrics = ["recall", "rr", "ndcg", "avg_precisions"]
         k = int(input("k (int): ").strip())
@@ -442,7 +443,7 @@ if __name__ == "__main__":
                 raise ValueError(f"Wrong reranker input {RERANKER}")
             for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
 
-                scores, p = ex.k_steph_search(dataset, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, name)
+                scores, p = ex.k_steph_search(dataset, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, name,file)
                 if eval_scores is None:
                     eval_scores, params = scores, p
                 else:

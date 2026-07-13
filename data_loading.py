@@ -60,13 +60,8 @@ def save_graph(G, name):
     node_list = list(G.nodes())  # 1. Build the global list
 
     cache_obj = {
-        # 1. The list preserves the exact order of the matrix rows/columns
         "global_node_list": node_list,
-
-        # 2. The dictionary maps Node ID -> Matrix Index Position
         "node_to_idx": {node: idx for idx, node in enumerate(node_list)},
-
-        # 3. The sparse matrix stores the edges using those Index Positions
         "adjacency": nx.to_scipy_sparse_array(G, format='csr')
     }
 
@@ -146,6 +141,8 @@ def save_eval_results(indexes, params, method, final_scores, results_file):
 
 
 
+
+
 def load_graph(name):
 
     G = nx.Graph()
@@ -168,6 +165,17 @@ def load_graph_parameters(name):
         info = json.load(f)
     return params, info
 
+def load_eval_results(name):
+    directory_name = f"Outputs/graphs/{name}/eval_results.json"
+    eval_results = []
+    with open(directory_name) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            r = json.loads(line)
+            eval_results.append(r)
+    return eval_results
 
 def get_files():
     directory_name = "Outputs/graphs"
@@ -218,10 +226,7 @@ def clear_eval(path):
     if os.path.exists(path):
         with open(path, "w") as f:
             f.write("")
-        print(f"file {path} cleared")
-    else:
-
-        print(f"file not found: {os.path.abspath(path)}")
+        #print(f"file {path} cleared")
 
 def graph_perf(file):
     # Opening the queries json file

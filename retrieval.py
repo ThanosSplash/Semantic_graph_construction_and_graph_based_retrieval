@@ -105,7 +105,7 @@ def pagerank(graph, k, nodes=None):
         return top_nodes
 
 
-def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids):
+def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids, adjacency, node_to_idx, global_node_list):
     """Given the retrieved ids using the personalised pagerank algorithm
        to calculate the graph score for them
     graph: The semantic graph
@@ -114,19 +114,19 @@ def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids):
     retrieved_ids: The ids that the retriever method retrieved
     """
     # Making the adjacency matrix and calculating the weights for the init nodes
-    node_to_idx = {node: idx for idx, node in enumerate(graph.nodes())}
-    adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
     # Safety check
-    valid = [(node_id, sims[i]) for i, node_id in enumerate(init_nodes) if node_id in node_to_idx]
-    total = sum(score for _, score in valid)
-    if total == 0 or len(valid) == 0:
+    valid_indices = []
+    valid_scores = []
+    for node_id, sim in zip(init_nodes, sims):
+        if node_id in node_to_idx:
+            valid_indices.append(node_to_idx[node_id])
+            valid_scores.append(sim)
+
+    total = sum(valid_scores)
+    if total == 0 or not valid_indices:
         raise Exception("Zero valid ids")
 
-    weights = {
-        node_to_idx[node_id]: sim / total
-        for node_id, sim in valid
-        if node_id in node_to_idx
-    }
+    weights = {idx: score / total for idx, score in zip(valid_indices, valid_scores)}
 
     # Running Pagerank algorithm
     pagerank = PageRank()
@@ -185,7 +185,7 @@ def bm25_scores_for_query(query_id, retrieved_ids):
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 """-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
-def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha):
+def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, adjacency, node_to_idx, global_node_list):
     """Given the retrieved ids using the similarity score and personalised pagerank score (graph score)
        to make a new rankings for them
        graph: The semantic graph
@@ -200,10 +200,9 @@ def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha):
     final_scores = []
 
     # Calculating graph score using personalised pagerank
-    graph_scores = ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids)
+    graph_scores = ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids, adjacency, node_to_idx, global_node_list)
     # Calculating total scores for each node
     for i, node_id in enumerate(retrieved_ids):
-        # graph_score = neighbors[node_id]
         graph_score = graph_scores[node_id]
         score = alpha * sim_dict[node_id] + (1 - alpha) * graph_score
         final_scores.append((node_id, score))
@@ -297,9 +296,20 @@ def top_k(query_id, k):
 
    return pred_results, query_correct_results, pred_sim
 
-def personalised_pagerank_multi_graph(graph, adjacency, node_to_idx, global_node_list,
-                                       init_nodes, sims, k, query_id, alpha, damping=0.85):
-    # 1. Fast Vectorized Personalization Mapping
+
+def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_nodes, sims, k, query_id, alpha):
+    """Given the init ids using the personalised pagerank algorithm
+        to calculate the graph score for every node in the graph
+        retrieve the topk nodes with the highest score
+    graph: The semantic graph
+    init_nodes: The node to init personalised pagerank algorithm
+    sims: Similarities for the personalised pagerank algorithm
+    retrieved_ids: The ids that the retriever method retrieved
+    alpha: Variable used to calculate the final score
+    k: number of items to be retrieved
+    """
+    # Making the adjacency matrix and calculating the weights for the init nodes
+    # Safety check
     valid_indices = []
     valid_scores = []
     for node_id, sim in zip(init_nodes, sims):
@@ -311,66 +321,13 @@ def personalised_pagerank_multi_graph(graph, adjacency, node_to_idx, global_node
     if total == 0 or not valid_indices:
         raise Exception("Zero valid ids")
 
-    weights = {idx: score / total for idx, score in zip(valid_indices, valid_scores)}
-
-    # 2. Build nx graph from adjacency and run PageRank on GPU backend
-    G = nx.from_scipy_sparse_array(adjacency, create_using=nx.DiGraph)
-    scores_personal_dict = nx.pagerank(
-        G,
-        alpha=damping,
-        personalization=weights,
-        dangling=weights,
-        backend="cugraph",
-    )
-    scores_personal = np.array([scores_personal_dict[i] for i in range(len(global_node_list))])
-
-    # 3. Vectorized Similarity Fetching
-    sim_dict, _ = sim_scores_for_query(query_id)
-    sim_array = np.array([sim_dict[node] for node in global_node_list])
-
-    # 4. Vectorized Math (C-speed)
-    final_scores_array = alpha * sim_array + (1 - alpha) * scores_personal
-
-    # 5. Fast Top-K extraction using argpartition
-    if k >= len(final_scores_array):
-        top_k_indices = np.argsort(-final_scores_array)
-    else:
-        top_k_indices = np.argpartition(-final_scores_array, k)[:k]
-        top_k_indices = top_k_indices[np.argsort(-final_scores_array[top_k_indices])]
-
-    result_nodes = [global_node_list[idx] for idx in top_k_indices]
-    return result_nodes
-
-def personalised_pagerank(graph, init_nodes, sims, k, query_id, alpha, name):
-    """Given the init ids using the personalised pagerank algorithm
-        to calculate the graph score for every node in the graph
-        retrieve the topk nodes with the highest score
-    graph: The semantic graph
-    init_nodes: The node to init personalised pagerank algorithm
-    sims: Similarities for the personalised pagerank algorithm
-    retrieved_ids: The ids that the retriever method retrieved
-    alpha: Variable used to calculate the final score
-    k: number of items to be retrieved
-    """
-    start_time = time.perf_counter()
-    # Making the adjacency matrix and calculating the weights for the init nodes
-    graph_cache = dt.load_graph_cache(name)
-    # Safety check
-    valid = [(node_id, sims[i]) for i, node_id in enumerate(init_nodes) if node_id in graph_cache['node_to_idx']]
-    total = sum(score for _, score in valid)
-    if total == 0 or len(valid) == 0:
-        raise Exception("Zero valid ids")
-
    # Build personalization vector: normalize similarities as seed weights
-    weights = {
-        graph_cache['node_to_idx'][node_id]: sim / total
-        for node_id, sim in valid
-    }
+    weights = {idx: score / total for idx, score in zip(valid_indices, valid_scores)}
 
     # Running Pagerank algorithm
     pagerank = PageRank()
     # Calculating the graph score and similarity score for all the nodes
-    scores_personal = pagerank.fit_predict(graph_cache['adjacency'], weights)
+    scores_personal = pagerank.fit_predict(adjacency, weights)
     graph_scores = dict(zip(graph.nodes(), scores_personal))
     sim_dict, query_correct_results = sim_scores_for_query(query_id)
     final_scores = []
@@ -379,13 +336,10 @@ def personalised_pagerank(graph, init_nodes, sims, k, query_id, alpha, name):
             final_scores.append((node_id, score))
     # Sorting based on final score and taking the topk
     final_scores.sort(key=lambda x: -x[1])
-    end_time = time.perf_counter()
-    execution_time = end_time - start_time
-    print(f"Time: {execution_time:.4f} seconds")
     return [node for node, _ in final_scores[:k]]
 
 
-def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, sims, reranker_type):
+def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, sims, reranker_type, adjacency=None, node_to_idx=None, global_node_list=None):
     """Given the init ids and the query id retrieve the topk items using three different types of
        reranker function
         graph: The semantic graph
@@ -405,7 +359,7 @@ def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, s
     final_scores = []
     # Using a reranked function
     if reranker_type == "graph_aware":
-        final_scores = rerank_graph_aware(graph, query_id, neighbors, init_nodes, sims, alpha)
+        final_scores = rerank_graph_aware(graph, query_id, neighbors, init_nodes, sims, alpha, adjacency, node_to_idx, global_node_list)
     elif reranker_type == "cross_encoder":
         final_scores = rerank_cross_encoder(query_id, neighbors)
     elif reranker_type == "BM25":
