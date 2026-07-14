@@ -174,7 +174,7 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
         # Saving the graph
         config = {}
         config["graph_type"] = "knn graph"
-        config["knn"] = knn_params
+        config["Graph building algorithm params"] = knn_params
         config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
 
@@ -232,7 +232,7 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
         # Saving the graph
         config = {}
         config["graph_type"] = "mutual knn graph"
-        config["knn"] = knn_params
+        config["Graph building algorithm params"] = knn_params
         config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
         dt.save_graph_data(config, name)
@@ -240,7 +240,7 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
 
     return G
 
-def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save):
+def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save, clustering_algo):
     """Building a semantic graph using knn but the data is pre clustered using kmeans or dbscan
        clustering_results: A dictionary with the pre clustered data and other information for the
        clustering
@@ -267,7 +267,7 @@ def build_clustering_knn_graph(clustering_results, knn_params, graph_params, pre
     config = {}
     config["clustering"] = clustering_results["clustering_params"]
     config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
-    config["graph_type"] = "clustering knn graph"
+    config["graph_type"] = f"{clustering_algo} knn graph"
     config["Graph building algorithm params"] = knn_params
     config["graph_params"] = graph_params
     config["Graph building algorithm"] = "KNN"
@@ -275,7 +275,7 @@ def build_clustering_knn_graph(clustering_results, knn_params, graph_params, pre
     dt.save_graph_data(config, graph_id, clustering_results["fig"])
     dt.save_graph(knn_g, graph_id)
     return
-def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save):
+def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save, clustering_algo):
     """Building a semantic graph using mutual knn but the data is pre clustered using kmeans or dbscan
            clustering_results: A dictionary with the pre clustered data and other information for the
            clustering
@@ -302,8 +302,8 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
     config = {}
     config["clustering"] = clustering_results["clustering_params"]
     config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
-    config["graph_type"] = "clustering mutual knn graph"
-    config["Building graph algorithm params"] = knn_params
+    config["graph_type"] = f"{clustering_algo} mutual knn graph"
+    config["Graph building algorithm params"] = knn_params
     config["graph_params"] = graph_params
     config["Graph building algorithm"] = "MUTUAL KNN"
     graph_id = "mutual_" + name

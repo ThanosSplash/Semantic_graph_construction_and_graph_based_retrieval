@@ -9,7 +9,7 @@ import numpy as np
 import plotting
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
-
+import copy
 """-----------------------------------------------------------------------------Dataset preperation-----------------------------------------------------------------------------"""
 
 def read_dataset_bioasq(path):
@@ -310,6 +310,9 @@ def save_leaderboard(eval_file, output_dir, glob=False):
             if "init" in r and r["init"] != "":
                 parts.append(f"init={r['init']}")
 
+            if "hops" in r and r["hops"] != "":
+                    parts.append(f"hops={r['hops']}")
+
             method = " | ".join(parts)
 
             grouped.setdefault(sample_type, []).append({
@@ -360,7 +363,66 @@ def make_global_leaderboard():
                     f_out.write(json.dumps(r) + "\n")
     save_leaderboard("Outputs/Global leaderboard", "leaderboards", True)
 
+def seperate_results(file):
+    grouped = {}
+    eval_dir = f"Outputs/graphs/{file}/eval_results.json"
+    with open(eval_dir) as f:
+         for line in f:
+            r = json.loads(line)
+            sample_type = r["sample_type"]
+            final = r["final scores"]
+            params = {}
+            method = r["method"]
+
+            if "k" in r:
+                params["k"] = int(r['k'])
+
+            if "alpha" in r and r["alpha"] != "":
+                params["alpha"] = float(r['alpha'])
+
+            if "reranker" in r and r["reranker"] != "":
+                params["reranker"] = r['reranker']
+                method =f"{method}_{r['reranker']}"
+
+            if "init" in r and r["init"] != "":
+                params["init"] = int(r['init'])
+
+            if "hops" in r and r["hops"] != "":
+                params["hops"] = int(r['hops'])
+
+            grouped.setdefault(method, {}).setdefault(sample_type, []).append({
+                "recall": float(final["recallk"]),
+                "mrr": float(final["mrr"]),
+                "ndcg": float(final["ndcg"]),
+                "map": float(final["mapk"]),
+                "params": params,
+            })
+
+    grouped_by_recall = copy.deepcopy(grouped)
+    grouped_by_mrr = copy.deepcopy(grouped)
+
+    for method, sample_types in grouped_by_mrr.items():
+        for sample_type, rows in sample_types.items():
+            rows.sort(key=lambda x: x["mrr"], reverse=True)
+
+    for method, sample_types in grouped_by_recall.items():
+        for sample_type, rows in sample_types.items():
+            rows.sort(key=lambda x: x["recall"], reverse=True)
 
 
+    results = {
+        "by_recall": grouped_by_recall,
+        "by_mrr": grouped_by_mrr,
+    }
+    grouped_dir = f"Outputs/graphs/{file}/grouped_results.pkl"
+    with open(grouped_dir, "wb") as f:
+        pickle.dump(results, f)
+
+
+def load_grouped_results(file, sorted_by):
+    grouped_dir = f"Outputs/graphs/{file}/grouped_results.pkl"
+    with open(grouped_dir, "rb") as f:
+        grouped = pickle.load(f)
+    return grouped[sorted_by]
 
 """-----------------------------------------------------------------------------Leaderboard-----------------------------------------------------------------------------"""

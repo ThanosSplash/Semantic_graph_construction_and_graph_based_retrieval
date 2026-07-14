@@ -15,8 +15,8 @@
             "None",
             "None"
       ],
-      "graph_type": "clustering mutual knn graph",
-      "Building graph algorithm params": {
+      "graph_type": "kmeans mutual knn graph",
+      "Graph building algorithm params": {
             "radius": 1.0,
             "algorithm": "auto",
             "leaf_size": 30,

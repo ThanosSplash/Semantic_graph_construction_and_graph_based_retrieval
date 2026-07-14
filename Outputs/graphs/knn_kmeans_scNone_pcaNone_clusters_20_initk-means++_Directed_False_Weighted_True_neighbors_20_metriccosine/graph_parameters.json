@@ -15,7 +15,7 @@
             "None",
             "None"
       ],
-      "graph_type": "clustering knn graph",
+      "graph_type": "kmeans knn graph",
       "Graph building algorithm params": {
             "radius": 1.0,
             "algorithm": "auto",

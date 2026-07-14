@@ -166,9 +166,9 @@ def make_graphs(c):
                 knn_params = merge(BASE_KNN, knn_combo)
 
                 name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
                 gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                                                     False)
+                                                     False, "kmeans")
                 count += 2
         #for kmeans_combo in grid_combinations(kmeans_grid):
             #kmeans_params = merge(BASE_KMEANS, kmeans_combo)
@@ -385,8 +385,9 @@ if __name__ == "__main__":
         GRAPH_NAME = input("Graph name: ").strip()
         dt.graph_perf(GRAPH_NAME)
     elif MODE.lower() == "plot graph stats":
-        pt.getting_plot_retrieval_stats()
-        #pt.getting_plot_graph_stats()
+        pt.getting_plot_retrieval_stats("by_mrr")
+        pt.getting_plot_retrieval_stats("by_recall")
+        pt.getting_plot_graph_stats()
     elif MODE.lower() == "run a test retrieval":
         METHOD = input("Choose method, Baseline, PPR, K steph, Hits, Shortest Path: ").strip()
         small, medium, long = dt.load_samples()
@@ -452,6 +453,7 @@ if __name__ == "__main__":
             params["sample_type"] = "all_samples"
             ex.evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
 
+
             #ex.k_steph_search(small, graph, RERANKER, k, k_step, alpha,f"Outputs/graphs/{file}", init, "small")
             #ex.k_steph_search(medium, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "medium")
             #ex.k_steph_search(long, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "long")
@@ -479,6 +481,7 @@ if __name__ == "__main__":
         execution_time = end_time - start_time
         print(f"Time: {execution_time:.4f} seconds")
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        dt.seperate_results(file)
     elif MODE.lower() == "make a test graph":
         q, a, c = dt.load_data()
         preprocess, graph_params = get_preprocess_graph_input()
@@ -510,8 +513,8 @@ if __name__ == "__main__":
                 name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
 
                 clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params, agglo_params={}, dbscan_params={},  preprocess= preprocess)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
-                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
+                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
             elif GRAPH_ALGO.lower() == "dbscan":
                 dbscan_combo = get_dbscan_input()
                 dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
@@ -521,9 +524,9 @@ if __name__ == "__main__":
                 pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
                 name = make_name(f"knn_dbscan_{pre_tag}", knn_combo, graph_params, dbscan_combo)
                 clustering_results = cl.perform_clustering(data=c, algorithm="dbscan", kmeans_params={}, agglo_params={}, dbscan_params=dbscan_params,  preprocess= preprocess)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "dbscan")
                 gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                                                  False)
+                                                  False, "dbscan")
             else:
                 raise ValueError(f"Wrong graph construction method: {GRAPH_ALGO}")
     else:

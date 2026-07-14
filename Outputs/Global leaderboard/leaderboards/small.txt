@@ -1,4 +1,4 @@
-=== SMALL ===
+    === SMALL ===
 
 Method                                                           Recall      MRR       nDCG      MAP       
 Graph                                             

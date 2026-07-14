@@ -272,6 +272,7 @@ def run_retrieval_ppr():
                  params["sample_type"] = "all_samples"
                  evaluate_method("PPR", eval_scores, f"Outputs/graphs/{file}", params)
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        dt.seperate_results(file)
         indx+=1
 
 def run_retrieval_k_steph():
@@ -337,6 +338,7 @@ def run_retrieval_k_steph():
                     #params["sample_type"] = "all_samples"
                     #evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
         dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        dt.seperate_results(file)
 
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 
