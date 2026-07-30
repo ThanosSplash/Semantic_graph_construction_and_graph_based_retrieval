@@ -18,6 +18,7 @@ from sklearn.decomposition import PCA
 import time
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
+import tables
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
@@ -33,22 +34,24 @@ def prepare_dataset():
     bioasq, bioasq_corpus = dt.read_dataset_bioasq("Datasets/rag-mini-bioasq/")
 
     # Converting bioasq, bioasq_corpus dataframes to three dictionaries
-    questions_emb, answers_emb, questions_text, answers_text = emb.make_embeddings(bioasq)
+    questions_emb, answers_emb, answers_text, questions_text = emb.make_embeddings(bioasq)
     corpus_emb, corpus_text = emb.make_embeddings_corpus(bioasq_corpus)
 
     # Saving the dictionaries questions, answers, corpus in a binary file
     dt.save_data(questions_emb, answers_emb, corpus_emb, questions_text, answers_text, corpus_text)
 
 
-def evaluate_method(method, scores, results_file, params):
+def rearrange_results_and_save(method, scores, results_file, params, predictions_per_query, relevant_passage_ids_per_query, latency_per_query):
     recall_total = [eval[1] for eval in scores["recall"]]
     rr_total = [eval[1] for eval in scores["rr"]]
     recall_map = {r[0]: r[1] for r in scores["recall"]}
-    first_rel_indx = {eval[0]: {"mrr": eval[1],
-                                "rank": eval[2] + 1 if eval[2] != -1 else eval[2],
-                                "recall": recall_map[eval[0]]
-                                }
-                      for eval in scores["rr"]}
+    eval_results_for_each_query = {eval[0]: {"mrr": eval[1],
+                                    "rank": eval[2] + 1 if eval[2] != -1 else eval[2],
+                                    "recall": recall_map[eval[0]],
+                                    "predictions": predictions_per_query[eval[0]],
+                                    "latency": latency_per_query[eval[0]]
+                                    }
+                          for eval in scores["rr"]}
     ndcg_total = [eval[1] for eval in scores["ndcg"]]
     avg_prec_sum = [eval[1] for eval in scores["avg_precisions"]]
 
@@ -57,17 +60,21 @@ def evaluate_method(method, scores, results_file, params):
     total_scores["mrr"] = ev.MRR_score(rr_total)
     total_scores["ndcg"] = sum(ndcg_total)/len(ndcg_total)
     total_scores["mapk"] = sum(avg_prec_sum)/len(avg_prec_sum)
+    dt.save_eval_results(eval_results_for_each_query, params, method, total_scores, results_file, relevant_passage_ids_per_query)
 
-    #print(total_scores)
+def rearrange_results_and_save_for_all_samples(method, scores, results_file, params):
+    recall_total = [eval[1] for eval in scores["recall"]]
+    rr_total = [eval[1] for eval in scores["rr"]]
+    recall_map = {r[0]: r[1] for r in scores["recall"]}
+    ndcg_total = [eval[1] for eval in scores["ndcg"]]
+    avg_prec_sum = [eval[1] for eval in scores["avg_precisions"]]
 
-
-
-
-    dt.save_eval_results(first_rel_indx, params, method, total_scores, results_file)
-    #dt.save_result("Top-" + str(k), recallk, mrr, ndcg, mapk, k, results_file)
-    return
-
-
+    total_scores = {}
+    total_scores["recallk"] = sum(recall_total) / len(recall_total)
+    total_scores["mrr"] = ev.MRR_score(rr_total)
+    total_scores["ndcg"] = sum(ndcg_total) / len(ndcg_total)
+    total_scores["mapk"] = sum(avg_prec_sum) / len(avg_prec_sum)
+    dt.save_avg_eval_results(method, total_scores, params, results_file)
 """-------------------------------------------------------------Search-------------------------------------------------------------"""
 def baseline_search(query_ids, k, results_file, sample_type):
     # Function that retrieves for each query the top-k most similar data and evaluates the results
@@ -76,14 +83,21 @@ def baseline_search(query_ids, k, results_file, sample_type):
     ndcg_scores = []
     avg_precisions = []
     eval_scores = {}
+    relevant_passage_ids_per_query = {}
+    predictions_per_query = {}
+    latency_per_query = {}
     params = {}
     for query_id in query_ids:
        # For each query calculates the top-k
+       start_time = time.perf_counter()
        predictions, correct, _ = rt.top_k(query_id, k)
-       #print(predictions)
-       #print(correct)
-       #print("---------------")
+       end_time = time.perf_counter()
+       execution_time = round(end_time - start_time, 3)
+
        # Evaluating the results
+       predictions_per_query[query_id] = predictions
+       relevant_passage_ids_per_query[query_id] = correct.astype(int).tolist()
+       latency_per_query[query_id] = execution_time
        recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
        score, rank = ev.RR_score(predictions, correct)
        rr_scores.append((query_id,  score, rank))
@@ -96,8 +110,8 @@ def baseline_search(query_ids, k, results_file, sample_type):
     eval_scores["avg_precisions"] = avg_precisions
     params["k"] = k
     params["sample_type"] = sample_type
-    evaluate_method("Baseline", eval_scores, results_file, params)
-    return eval_scores, params
+    rearrange_results_and_save("Baseline", eval_scores, results_file, params, predictions_per_query, relevant_passage_ids_per_query, latency_per_query)
+    return eval_scores, params, predictions_per_query, relevant_passage_ids_per_query
 
 
 def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample_type, alpha, file_name):
@@ -108,17 +122,26 @@ def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample
     avg_precisions = []
     eval_scores = {}
     params = {}
+    relevant_passage_ids_per_query = {}
+    predictions_per_query = {}
+    latency_per_query = {}
     graph_cache = dt.load_graph_cache(file_name)
     adjacency = csr_matrix(graph_cache['adjacency'])
     for query_id in query_ids:
         # For each query calculates the top-k
         imporant_nodes, correct, sims = rt.top_k(query_id, init)
         # Running personalised pagerank
+        start_time = time.perf_counter()
         predictions = rt.personalised_pagerank(graph, adjacency, graph_cache['node_to_idx'], graph_cache['global_node_list'],imporant_nodes, sims, k, query_id, alpha)
+        end_time = time.perf_counter()
+        execution_time = round(end_time - start_time, 3)
         # print(predictions)
         # print(correct)
         # print("---------------")
         # Evaluating the results
+        predictions_per_query[query_id] = predictions
+        relevant_passage_ids_per_query[query_id] = correct.astype(int).tolist()
+        latency_per_query[query_id] = execution_time
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
@@ -133,7 +156,8 @@ def personalised_pagerank_search(query_ids, graph, k, results_file, init, sample
     params["alpha"] = alpha
     params["sample_type"] = sample_type
     params["init"] = init
-    evaluate_method("PPR", eval_scores, results_file, params)
+    params["graph"] = file_name
+    rearrange_results_and_save("PPR", eval_scores, results_file, params, predictions_per_query, relevant_passage_ids_per_query, latency_per_query)
 
     return eval_scores, params
 def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file, init, sample_type, file_name):
@@ -143,12 +167,16 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
     avg_precisions = []
     eval_scores = {}
     params = {}
+    relevant_passage_ids_per_query = {}
+    predictions_per_query = {}
+    latency_per_query = {}
     if reranker_type == "graph_aware":
         graph_cache = dt.load_graph_cache(file_name)
         adjacency = csr_matrix(graph_cache['adjacency'])
 
     for query_id in query_ids:
         imporant_nodes, correct, sims = rt.top_k(query_id, init)
+        start_time = time.perf_counter()
         if reranker_type == "graph_aware":
             predictions, scores = rt.k_step_neighborhood_expansion(graph, imporant_nodes, query_id, k, hops, alpha,
                                                                    sims, reranker_type, adjacency, graph_cache['node_to_idx'], graph_cache['global_node_list'])
@@ -158,6 +186,11 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
         # print(predictions)
         # print(correct)
         # print("---------------")
+        end_time = time.perf_counter()
+        execution_time = round(end_time - start_time, 3)
+        predictions_per_query[query_id] = predictions
+        relevant_passage_ids_per_query[query_id] = correct.astype(int).tolist()
+        latency_per_query[query_id] = execution_time
         recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
         score, rank = ev.RR_score(predictions, correct)
         rr_scores.append((query_id, score, rank))
@@ -174,10 +207,11 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
     params["init"] = init
     params["alpha"] = alpha
     params["hops"] = hops
-    evaluate_method("k-steph", eval_scores, results_file, params)
+    params["graph"] = file_name
+    rearrange_results_and_save("k-steph", eval_scores, results_file, params, predictions_per_query, relevant_passage_ids_per_query,latency_per_query)
     return eval_scores, params
 
-def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, sample_type):
+def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, sample_type, file_name):
     rr_scores = []
     recallk_scores = []
     ndcg_scores = []
@@ -201,10 +235,11 @@ def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, samp
     params["reranker"] = ""
     params["sample_type"] = sample_type
     params["init"] = init
-    evaluate_method("Hits", eval_scores, results_file, params)
+    params["graph"] = file_name
+    rearrange_results_and_save("Hits", eval_scores, results_file, params)
     return
 
-def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file, init, sample_type):
+def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file, init, sample_type, file_name):
     rr_scores = []
     recallk_scores = []
     ndcg_scores = []
@@ -231,7 +266,7 @@ def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file
     params["reranker"] = reranker_type
     params["sample_type"] = sample_type
     params["init"] = init
-    evaluate_method("Shortest Path", eval_scores, results_file, params)
+    rearrange_results_and_save("Shortest Path", eval_scores, results_file, params)
     return
 """-------------------------------------------------------------Search-------------------------------------------------------------"""
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
@@ -245,12 +280,13 @@ def run_retrieval_ppr():
     inits = [2, 5, 10, 20, 50]
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     indx = 0
+
     pbar = tqdm(range(len(files)))
     for i in pbar:
         file = files[i]
         pbar.set_description(f"Processing {files[i]}")
         start_time = time.perf_counter()
-        #dt.clear_eval(f"Outputs/graphs/{file}/eval_results.json")
+        dt.clear_eval(file)
         graph = dt.load_graph(file)
         #print(f"\n=== File: {file} ===")
 
@@ -270,20 +306,22 @@ def run_retrieval_ppr():
                          for m in metrics:
                              eval_scores[m] += scores[m]
                  params["sample_type"] = "all_samples"
-                 evaluate_method("PPR", eval_scores, f"Outputs/graphs/{file}", params)
-        dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
-        dt.seperate_results(file)
+                 rearrange_results_and_save_for_all_samples("PPR", eval_scores, f"Outputs/graphs/{file}", params)
+        tables.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        #dt.seperate_results(file)
         indx+=1
 
-def run_retrieval_k_steph():
+def run_retrieval_k_steph(files = None):
     small, medium, long = dt.load_samples()
-    files = dt.get_files()
+    if files is None:
+        files = dt.get_files()
+
 
     # Parameter grids
     k_retrive = [10]
     alphas = [0 ,0.2, 0.5, 0.8]
     inits = [2, 5, 10, 20, 50]
-    k_steps = [2, 3]
+    k_steps = [2, 3, 4]
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     pbar = tqdm(range(len(files)))
     for i in pbar:
@@ -296,23 +334,11 @@ def run_retrieval_k_steph():
             for alpha in alphas:
                 for init in inits:
                     for k_step in k_steps:
-                        eval_scores = None
-                        params = None
-                        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                            scores, p = k_steph_search(dataset, graph, "BM25", k, k_step, alpha,
-                                                       f"Outputs/graphs/{file}", init, name, file)
-                            if eval_scores is None:
-                                eval_scores, params = scores, p
-                            else:
-                                for m in metrics:
-                                    eval_scores[m] += scores[m]
-                        params["sample_type"] = "all_samples"
-                        evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
                         #eval_scores = None
                         #params = None
                         #for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                            #scores, p = k_steph_search(dataset, graph, "graph_aware", k, k_step, alpha,
-                            #                           f"Outputs/graphs/{file}", init, name, file)
+                            #scores, p = k_steph_search(dataset, graph, "BM25", k, k_step, alpha,
+                             #                          f"Outputs/graphs/{file}", init, name, file)
                             #if eval_scores is None:
                                 #eval_scores, params = scores, p
                             #else:
@@ -320,6 +346,18 @@ def run_retrieval_k_steph():
                                     #eval_scores[m] += scores[m]
                         #params["sample_type"] = "all_samples"
                         #evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
+                        eval_scores = None
+                        params = None
+                        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                            scores, p = k_steph_search(dataset, graph, "graph_aware", k, k_step, alpha,
+                                                       f"Outputs/graphs/{file}", init, name, file)
+                            if eval_scores is None:
+                                eval_scores, params = scores, p
+                            else:
+                                for m in metrics:
+                                    eval_scores[m] += scores[m]
+                        params["sample_type"] = "all_samples"
+                        rearrange_results_and_save_for_all_samples("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
         #for k in k_retrive:
             #for init in inits:
                 #for k_step in k_steps:
@@ -336,9 +374,9 @@ def run_retrieval_k_steph():
                             #for m in metrics:
                                 #eval_scores[m] += scores[m]
                     #params["sample_type"] = "all_samples"
-                    #evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
-        dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
-        dt.seperate_results(file)
+                    #rearrange_results_and_save_for_all_samples("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
+        tables.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        #dt.seperate_results(file)
 
 """-------------------------------------------------------------Retrieval-------------------------------------------------------------"""
 

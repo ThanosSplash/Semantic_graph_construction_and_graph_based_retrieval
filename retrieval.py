@@ -293,7 +293,6 @@ def top_k(query_id, k):
    top_k_docs = sorted_docs[:k]
    pred_results = [doc for doc, sim in top_k_docs]
    pred_sim = [sim for doc, sim in top_k_docs]
-
    return pred_results, query_correct_results, pred_sim
 
 

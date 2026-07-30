@@ -16,6 +16,7 @@ import graph_construction as gc
 from sklearn.feature_extraction.text import TfidfVectorizer
 import time
 import plotting as pt
+import tables
 import pandas as pd
 knn_metrics = ['cosine', 'euclidean', 'manhattan', 'minkowski']
 k_means_algorithms = ['k-means++', 'random']
@@ -30,7 +31,7 @@ knn_grid = {
     "metric":      ["cosine"]
 }
 threshold_grid = {
-    "threshold_distance": [0.5, 0.6]
+    "threshold_distance": [0.8, 0.6, 0.4]
 
 }
 
@@ -133,24 +134,24 @@ def make_graphs(c):
 
      for pre in preprocess_combinations:
         preprocess = {"scaler": pre["scaler"], "pca": pre["pca"]}
-        pre_tag = f"sc{pre['scaler']}_pca{pre['pca']}"
+
 
 
         # ── knn_Graph ────────────────────────────────────────────────────────
-        for knn_combo in grid_combinations(knn_grid):
-            knn_params = merge(BASE_KNN, knn_combo)
-            name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
-            print(f"[knn_Graph]   {name}")
-            gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            count+=1
+        #for knn_combo in grid_combinations(knn_grid):
+            #knn_params = merge(BASE_KNN, knn_combo)
+            #name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
+            #print(f"[knn_Graph]   {name}")
+            #gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+            #count+=1
 
         # ── mutual_knn ───────────────────────────────────────────────────────
-        for knn_combo in grid_combinations(knn_grid):
-            knn_params = merge(BASE_KNN, knn_combo)
-            name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
-            print(f"[mutual_knn]  {name}")
-            gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            count+=1
+       #for knn_combo in grid_combinations(knn_grid):
+            #knn_params = merge(BASE_KNN, knn_combo)
+            #name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
+            #print(f"[mutual_knn]  {name}")
+            #gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+            #count+=1
         # ── threshold_graph ───────────────────────────────────────────────────────
         #for threshold_combo in grid_combinations(threshold_grid):
             #threshold_params = merge(BASE_THRESHOLD, threshold_combo)
@@ -158,26 +159,26 @@ def make_graphs(c):
             #gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
             #results.append(("threshold", name, threshold_combo, preprocess))
         # ── kmeans clustering ───────────────────────────────────────────────────────
-        for kmeans_combo in grid_combinations(kmeans_grid):
-            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
-            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
-                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            for knn_combo in grid_combinations(knn_grid):
-                knn_params = merge(BASE_KNN, knn_combo)
-
-                name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
-                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                                                     False, "kmeans")
-                count += 2
         #for kmeans_combo in grid_combinations(kmeans_grid):
             #kmeans_params = merge(BASE_KMEANS, kmeans_combo)
             #clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
              #                                          agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            #for threshold_combo in grid_combinations(threshold_grid):
-                #threshold_params = merge(BASE_THRESHOLD, threshold_combo)
-                #name = make_name(f"threshold_kmeans_{pre_tag}", threshold_combo, graph_params, kmeans_combo)
-                #gc.build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, False)
+            #for knn_combo in grid_combinations(knn_grid):
+                #knn_params = merge(BASE_KNN, knn_combo)
+
+                #name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
+                #gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
+                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
+                #                                     False, "kmeans")
+                #count += 2
+        for kmeans_combo in grid_combinations(kmeans_grid):
+            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
+            for threshold_combo in grid_combinations(threshold_grid):
+                threshold_params = merge(BASE_THRESHOLD, threshold_combo)
+                name = make_name(f"threshold_kmeans_{pre_tag}", threshold_combo, graph_params, kmeans_combo)
+                gc.build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, False, "kmeans")
 
         #for dbscan_combo in grid_combinations(dbscan_grid):
             #dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
@@ -246,6 +247,15 @@ def get_knn_input():
 
     knn_combo = {"n_neighbors": N_NEIGHBORS, "metric": METRIC}
     return knn_combo
+def get_dbscan_input():
+    EPS = float(input("eps (float): ").strip())
+    MIN_SAMPLES = int(input("min_samples (int): ").strip())
+    if EPS <= 0:
+        raise ValueError(f"Negative Value Error on EPS: {EPS}")
+    if MIN_SAMPLES <= 0:
+        raise ValueError(f"Negative Value Error on MIN_SAMPLES: {MIN_SAMPLES}")
+    dbscan_combo = {"eps": EPS, "min_samples": MIN_SAMPLES}
+    return dbscan_combo
 def get_kmeans_input():
     N_CLUSTERS = int(input("n_clusters (int): ").strip())
     INIT = input("Algorithm (k-means++/random: ").strip()
@@ -257,18 +267,10 @@ def get_kmeans_input():
     kmeans_combo = {"n_clusters": N_CLUSTERS, "init": INIT}
     return kmeans_combo
 
-def get_dbscan_input():
-    EPS = float(input("eps (float): ").strip())
-    MIN_SAMPLES = int(input("min_samples (int): ").strip())
-    if EPS <= 0:
-        raise ValueError(f"Negative Value Error on EPS: {EPS}")
-    if MIN_SAMPLES <= 0:
-        raise ValueError(f"Negative Value Error on MIN_SAMPLES: {MIN_SAMPLES}")
-    dbscan_combo = {"eps": EPS, "min_samples": MIN_SAMPLES}
-    return dbscan_combo
 
 def make_query_samples():
     q, a, c = dt.load_texts()
+    q_emb, _, _ = dt.load_data()
     vectorizer = TfidfVectorizer()
     analyzer = vectorizer.build_analyzer()
     query_labels = {}
@@ -276,6 +278,10 @@ def make_query_samples():
     p33, p66 = np.percentile(lengths, [33, 66])
     for qid, text in q.items():
         n = len(analyzer(text))
+        query = q_emb[qid]
+        query_correct_results = query[1]
+        if len(query_correct_results) < 5:
+            continue
 
         if n <= p33:
             label = "small"
@@ -312,17 +318,14 @@ def run_eval_tests():
 
     print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
     print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=2)}")
-    print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"ndcg@k {ev.nDCGk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print(f"Mine ndcg@k {ev.ndcg_score_(predictions = predictions, ground_truth=ground_truth, k=4)}")
+    print(f"Mine ndcg@k {ev.nDCGk_score(predictions = predictions, ground_truth=ground_truth, k=4)}")
     print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=4)}")
     print("-----------------------------------------------------")
     predictions = ["C", "B", "X", "D"]
     ground_truth = ["C", "B", "X"]
     print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
     print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"ndcg@k {ev.nDCGk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print(f"Mine ndcg@k {ev.ndcg_score_(predictions=predictions, ground_truth=ground_truth, k=4)}")
+    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=4)}")
     print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=4)}")
     print("-----------------------------------------------------")
 
@@ -330,8 +333,7 @@ def run_eval_tests():
     ground_truth = ["A", "B", "X"]
     print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=3)}")
     print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"ndcg@k {ev.nDCGk_score(predictions=predictions, correct_results=ground_truth, k=3)}")
-    print(f"Mine ndcg@k {ev.ndcg_score_(predictions=predictions, ground_truth=ground_truth, k=3)}")
+    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=3)}")
     print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=3)}")
     print("-----------------------------------------------------")
 
@@ -339,8 +341,7 @@ def run_eval_tests():
     ground_truth = ["A", "B", "X"]
     print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=3)}")
     print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"ndcg@k {ev.nDCGk_score(predictions=predictions, correct_results=ground_truth, k=3)}")
-    print(f"Mine ndcg@k {ev.ndcg_score_(predictions=predictions, ground_truth=ground_truth, k=3)}")
+    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=3)}")
     print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=3)}")
     print("-----------------------------------------------------")
 
@@ -349,8 +350,7 @@ def run_eval_tests():
     ground_truth = ["C", "B", "X"]
     print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
     print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"ndcg@k {ev.nDCGk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print(f"Mine ndcg@k {ev.ndcg_score_(predictions=predictions, ground_truth=ground_truth, k=4)}")
+    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=4)}")
     print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=4)}")
     print("-----------------------------------------------------")
 
@@ -358,9 +358,9 @@ def run_eval_tests():
 if __name__ == "__main__":
 
 
-
     MODE = str(input("Choose Mode, Make graphs, Run eval tests, Make a test graph, Run a test retrieval, "
-                     "Run retrieval, Make embeddings, Make Global leaderboard, Graph performance, plot graph stats, make query samples: "))
+                     "Run retrieval, Make embeddings, Make Global leaderboard, Graph performance, plot graph stats, "
+                     "make query samples, make tables: "))
 
 
     #MODE = ""
@@ -374,20 +374,43 @@ if __name__ == "__main__":
         if METHOD.lower() == "ppr":
             ex.run_retrieval_ppr()
         elif METHOD.lower() == "k steph":
-            ex.run_retrieval_k_steph()
+           #ex.run_retrieval_k_steph()
+           ex.run_retrieval_k_steph(dt.get_top_5_best_performing_graphs("PPR", "all_samples", f"Outputs/graphs"))
     elif MODE.lower() == "run eval tests":
         run_eval_tests()
     elif MODE.lower() == "make global leaderboard":
-        dt.make_global_leaderboard()
+        tables.make_global_leaderboard()
     elif MODE.lower() == "make query samples":
         make_query_samples()
     elif MODE.lower() == "graph performance":
         GRAPH_NAME = input("Graph name: ").strip()
         dt.graph_perf(GRAPH_NAME)
     elif MODE.lower() == "plot graph stats":
-        pt.getting_plot_retrieval_stats("by_mrr")
-        pt.getting_plot_retrieval_stats("by_recall")
-        pt.getting_plot_graph_stats()
+        METHOD = input("clustering vs not clustering, weighted vs unweighted, "
+                       "directed vs undirected, ppr vs k-steph: ").strip()
+        if METHOD.lower() == "clustering vs not clustering":
+            pt.clustering_vs_not_clustering("PPR", "all_samples")
+        elif METHOD.lower() == "weighted vs unweighted":
+            pt.weighted_vs_unweighted_undirected("PPR", "all_samples")
+        elif METHOD.lower() == "directed vs undirected":
+            WEI_UNWEI = input("weighted or unweighted ").strip()
+            if WEI_UNWEI.lower() == "weighted":
+                pt.undirected_vs_directed_weighted('PPR', "all_samples")
+            elif WEI_UNWEI.lower() == "unweighted":
+                pt.undirected_vs_directed_unweighted('PPR', "all_samples")
+        elif METHOD.lower() == "ppr vs k-steph":
+            pt.ppr_vs_k_steph_graph_aware('all_samples')
+
+
+        #pt.getting_plot_graph_stats()
+    elif MODE.lower() == "make tables":
+        tables.make_graph_construction_sensitivity_table()
+        files = dt.get_files(f"Outputs/graphs")
+        for file in files:
+
+            tables.make_init_sensitivity_table(file)
+            tables.make_alpha_sensitivity_table(file)
+            tables.make_query_table(file)
     elif MODE.lower() == "run a test retrieval":
         METHOD = input("Choose method, Baseline, PPR, K steph, Hits, Shortest Path: ").strip()
         small, medium, long = dt.load_samples()
@@ -402,14 +425,14 @@ if __name__ == "__main__":
         start_time = time.perf_counter()
         if METHOD.lower() == "baseline":
             for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                scores, p = ex.baseline_search(dataset, k, "Outputs/Global leaderboard", name)
+                scores, p, predictions_per_query, relevant_passage_ids_per_query = ex.baseline_search(dataset, k, "Outputs/Baseline-RAG", name)
                 if eval_scores is None:
                     eval_scores, params = scores, p
                 else:
                     for m in metrics:
                         eval_scores[m] += scores[m]
             params["sample_type"] = "all_samples"
-            ex.evaluate_method("Baseline", eval_scores, "Outputs/Global leaderboard", params)
+            ex.rearrange_results_and_save_for_all_samples("Baseline", eval_scores, "Outputs/Baseline-RAG", params)
 
         elif METHOD.lower() == "ppr":
             graph = dt.load_graph(file)
@@ -427,7 +450,7 @@ if __name__ == "__main__":
                     for m in metrics:
                         eval_scores[m] += scores[m]
             params["sample_type"] = "all_samples"
-            ex.evaluate_method("PPR", eval_scores, f"Outputs/graphs/{file}", params)
+            ex.rearrange_results_and_save_for_all_samples("PPR", eval_scores, f"Outputs/graphs/{file}", params)
         elif METHOD.lower() == "k steph":
             graph = dt.load_graph(file)
             init = int(input("init (int): ").strip())
@@ -451,7 +474,7 @@ if __name__ == "__main__":
                     for m in metrics:
                         eval_scores[m] += scores[m]
             params["sample_type"] = "all_samples"
-            ex.evaluate_method("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
+            ex.rearrange_results_and_save_for_all_samples("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
 
 
             #ex.k_steph_search(small, graph, RERANKER, k, k_step, alpha,f"Outputs/graphs/{file}", init, "small")
@@ -480,26 +503,28 @@ if __name__ == "__main__":
         end_time = time.perf_counter()
         execution_time = end_time - start_time
         print(f"Time: {execution_time:.4f} seconds")
-        dt.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
+        tables.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
         dt.seperate_results(file)
     elif MODE.lower() == "make a test graph":
         q, a, c = dt.load_data()
         preprocess, graph_params = get_preprocess_graph_input()
+        pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
         METHOD = input("Choose method, Mutual knn, Knn, Clustering, threshold: ").strip()
         if METHOD.lower() == "mutual knn":
             knn_combo = get_knn_input()
             knn_params = merge(BASE_KNN, knn_combo)
-            name = make_name(f"mutual_knn_", knn_combo, graph_params)
-            ex.mutual_knn(c, knn_params, preprocess, name, graph_params, True)
+            name = make_name(f"mutual_knn_{pre_tag}", knn_combo, graph_params)
+            gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
         elif METHOD.lower() == "knn":
             knn_combo = get_knn_input()
             knn_params = merge(BASE_KNN, knn_combo)
-            name = make_name(f"knn_", knn_combo, graph_params)
-            ex.knn_Graph(c, knn_params, preprocess, name, graph_params, True)
+            name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
+            print(name)
+            gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
         elif METHOD.lower() == "threshold":
             threshold = float(input("threshold distance (float): ").strip())
             threshold_params = {"threshold_distance": threshold}
-            name = make_name(f"threshold_", threshold_params, graph_params)
+            name = make_name(f"threshold_{pre_tag}", threshold_params, graph_params)
             gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
         elif METHOD.lower() == "clustering":
             GRAPH_ALGO = input("Choose algorithm, Kmeans/Dbscan: ").strip()
@@ -509,7 +534,6 @@ if __name__ == "__main__":
 
                 knn_combo = get_knn_input()
                 knn_params = merge(BASE_KNN, knn_combo)
-                pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
                 name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
 
                 clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params, agglo_params={}, dbscan_params={},  preprocess= preprocess)

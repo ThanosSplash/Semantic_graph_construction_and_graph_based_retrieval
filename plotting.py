@@ -187,85 +187,16 @@ def plot_graph_stats(info_knn,  info_mutual_knn, clustering = "", clusters = 0):
     plt.tight_layout()
     plt.show()
 
-def getting_plot_graph_stats():
-    files = dt.get_files()
-    info_to_plot_knn = []
-    info_to_plot_mutual_knn = []
-    info_to_plot_clustering_knn = {}
-    info_to_plot_clustering_mutual_knn = {}
+"""-------------------------------------------------------------Make plot functions-------------------------------------------------------------"""
 
-    for file in files:
-        params, info = dt.load_graph_parameters(file)
-        if params['graph_type'] == "knn graph":
-            info_to_plot_knn.append((
-                params['knn']['n_neighbors'],
-                info['Number of connected components'],
-                info['Number of communities'][0],
-                info['Graph Density'],
-                info['Average Degree'],
-            ))
-        elif params['graph_type'] == "mutual knn graph":
-            info_to_plot_mutual_knn.append((
-                params['knn']['n_neighbors'],
-                info['Number of connected components'],
-                info['Number of communities'][0],
-                info['Graph Density'],
-                info['Average Degree'],))
-        elif params['graph_type'] == "clustering knn graph":
-            if params['clustering']['n_clusters'] not in info_to_plot_clustering_knn:
-                info_to_plot_clustering_knn[params['clustering']['n_clusters']] = [(
-                    params['Graph building algorithm params']['n_neighbors'],
-                    info['Number of connected components'],
-                    info['Number of communities'][0],
-                    info['Graph Density'],
-                    info['Average Degree'],
-                )]
-            else:
-                info_to_plot_clustering_knn[params['clustering']['n_clusters']].append((
-                    params['Graph building algorithm params']['n_neighbors'],
-                    info['Number of connected components'],
-                    info['Number of communities'][0],
-                    info['Graph Density'],
-                    info['Average Degree'],
-                ))
-        elif params['graph_type'] == "clustering mutual knn graph":
-            if params['clustering']['n_clusters'] not in info_to_plot_clustering_mutual_knn:
-                info_to_plot_clustering_mutual_knn[params['clustering']['n_clusters']] = [(
-                    params['Building graph algorithm params']['n_neighbors'],
-                    info['Number of connected components'],
-                    info['Number of communities'][0],
-                    info['Graph Density'],
-                    info['Average Degree'],
-                )]
-            else:
-                info_to_plot_clustering_mutual_knn[params['clustering']['n_clusters']].append((
-                    params['Building graph algorithm params']['n_neighbors'],
-                    info['Number of connected components'],
-                    info['Number of communities'][0],
-                    info['Graph Density'],
-                    info['Average Degree'],
-                ))
-
-    info_to_plot_knn.sort(key=lambda x: x[0])
-    info_to_plot_mutual_knn.sort(key=lambda x: x[0])
-    #info_to_plot_clustering_knn.sort(key=lambda x: x[0])
-    #info_to_plot_clustering_mutual_knn.sort(key=lambda x: x[0])
-    plot_graph_stats(info_to_plot_knn, info_to_plot_mutual_knn)
-    print(info_to_plot_clustering_knn.keys())
-    for cl in info_to_plot_clustering_knn.keys():
-      test_knn = info_to_plot_clustering_knn[cl]
-      test_knn.sort(key=lambda x: x[0])
-      test_mutual_knn = info_to_plot_clustering_mutual_knn[cl]
-      test_mutual_knn.sort(key=lambda x: x[0])
-      plot_graph_stats(test_knn, test_mutual_knn, "kmeans", cl)
-def extract(info, sample_type):
+def make_plot_for_best_eval_results(info_knn, info_mutual_knn, info_kmeans_knn, info_kmeans_mutual_knn, sample_type):
+    def extract(info, sample_type):
         recall = [x[0][0]['recall'] for x in info[sample_type]]
         mrr = [x[0][0]['mrr'] for x in info[sample_type]]
         ndcg = [x[0][0]['ndcg'] for x in info[sample_type]]
         map_ = [x[0][0]['map'] for x in info[sample_type]]
         k = [x[1] for x in info[sample_type]]
         return k, recall, mrr, ndcg, map_
-def plot_eval_results(info_knn, info_mutual_knn, info_kmeans_knn, info_kmeans_mutual_knn, sample_type):
 
     k_vals, recall_vals, mrr_vals, ndcg_vals, map_vals = extract(info_knn, sample_type)
     k_vals_mutual, recall_vals_mutual, mrr_vals_mutual, ndcg_vals_mutual, map_vals_mutual = extract(info_mutual_knn, sample_type)
@@ -311,7 +242,116 @@ def plot_eval_results(info_knn, info_mutual_knn, info_kmeans_knn, info_kmeans_mu
 
     plt.tight_layout()
     plt.show()
-def plot_eval_results_of_a_graph(info):
+
+def make_plot_for_eval_results(info_knn, info_mutual_knn, info_kmeans_knn, info_kmeans_mutual_knn, sample_type):
+    def extract(info, sample_type):
+        recall = [x[0][0]['recall'] for x in info[sample_type]]
+        mrr = [x[0][0]['mrr'] for x in info[sample_type]]
+        ndcg = [x[0][0]['ndcg'] for x in info[sample_type]]
+        map_ = [x[0][0]['map'] for x in info[sample_type]]
+        k = [x[1] for x in info[sample_type]]
+        return k, recall, mrr, ndcg, map_
+
+    k_vals, recall_vals, mrr_vals, ndcg_vals, map_vals = extract(info_knn, sample_type)
+    k_vals_mutual, recall_vals_mutual, mrr_vals_mutual, ndcg_vals_mutual, map_vals_mutual = extract(info_mutual_knn, sample_type)
+    baseline = dt.load_results_file(f"Outputs/Baseline-RAG/baseline_results.json")['Baseline'][sample_type]
+    baseline_recall = baseline[0]['recall']
+    baseline_mrr = baseline[0]['mrr']
+    baseline_ndcg = baseline[0]['ndcg']
+    baseline_map = baseline[0]['map']
+    metrics = [
+        (recall_vals, recall_vals_mutual, baseline_recall,"recall"),
+        (mrr_vals, mrr_vals_mutual,baseline_mrr,"mrr"),
+        (ndcg_vals, ndcg_vals_mutual,baseline_ndcg ,"ndcg"),
+        (map_vals, map_vals_mutual,baseline_map ,"map"),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    axes = axes.flatten()
+
+    for ax, (values, values_mutual, baseline_val, label) in zip(axes, metrics):
+        ax.plot(k_vals, values, marker='o', color='g', label="knn")
+        ax.plot(k_vals_mutual, values_mutual, marker='o', color='purple', label="mutual knn")
+        ax.axhline(
+            y=baseline_val,
+            color='red',
+            linestyle='--',
+            linewidth=2,
+            label='Baseline RAG'
+        )
+        ax.set_ylabel(label)
+        ax.set_title(f"{label} - {sample_type}")
+        ax.grid(False)
+
+    clusters = list(info_kmeans_knn.keys())
+    print(clusters)
+    colors_knn = ['blue', 'orange', 'brown', 'magenta', 'cyan', 'olive', 'navy']
+    colors_mutual = ['gold', 'teal', 'pink', 'gray', 'indigo', 'coral', 'lime', 'chocolate']
+
+    for i, cluster in enumerate(clusters):
+        color = colors_knn[i % len(colors_knn)]
+        color_ = colors_mutual[i % len(colors_mutual)]
+        k_k, recall_k, mrr_k, ndcg_k, map_k = extract(info_kmeans_knn[cluster], sample_type)
+        k_km, recall_km, mrr_km, ndcg_km, map_km = extract(info_kmeans_mutual_knn[cluster], sample_type)
+
+        cluster_metrics = [recall_k, mrr_k, ndcg_k, map_k]
+        cluster_metrics_mutual = [recall_km, mrr_km, ndcg_km, map_km]
+
+        for ax, vals, vals_mutual in zip(axes, cluster_metrics, cluster_metrics_mutual):
+            ax.plot(k_k, vals, marker='o', color=color, label=f"kmeans knn ({cluster})")
+            ax.plot(k_km, vals_mutual, marker='o', color=color_, label=f"kmeans mutual knn ({cluster})")
+
+    for ax in axes:
+        ax.legend(fontsize=8)
+
+    plt.tight_layout()
+    plt.show()
+
+def make_plot_of_eval_results_of_a_graph_type(info_to_plot, sample_type):
+    def extract(info, sample_type):
+        recall = [x[0][0]['recall'] for x in info[sample_type]]
+        mrr = [x[0][0]['mrr'] for x in info[sample_type]]
+        ndcg = [x[0][0]['ndcg'] for x in info[sample_type]]
+        map_ = [x[0][0]['map'] for x in info[sample_type]]
+        k = [x[1] for x in info[sample_type]]
+        return k, recall, mrr, ndcg, map_
+
+    k_vals_all = []
+    recall_vals_all = []
+    mrr_vals_all = []
+    ndcg_vals_all = []
+    map_vals_all = []
+
+    for method in info_to_plot.keys():
+        k_vals, recall_vals, mrr_vals, ndcg_vals, map_vals = extract(info_to_plot[method], sample_type)
+        k_vals_all.append((k_vals, method))
+        recall_vals_all.append((recall_vals, method))
+        mrr_vals_all.append((mrr_vals, method))
+        ndcg_vals_all.append((ndcg_vals, method))
+        map_vals_all.append((map_vals, method))
+    metrics = [
+        (recall_vals_all, "recall"),
+        (mrr_vals_all, "mrr"),
+        (ndcg_vals_all, "ndcg"),
+        (map_vals_all, "map"),
+    ]
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    axes = axes.flatten()
+    colors_knn = ['blue', 'orange', 'purple', 'brown', 'magenta', 'cyan', 'olive', 'navy']
+    for ax, (values, label) in zip(axes, metrics):
+        for i in range(len(values)):
+            print(values[i][0])
+            ax.plot(k_vals_all[i][0], values[i][0], marker='o', color=colors_knn[i], label=values[i][1])
+
+        ax.set_xlabel("Number of Neighbors (k)")
+        ax.set_ylabel(label)
+        ax.set_title(f"{label} - {sample_type}")
+        ax.grid(False)
+        ax.legend()
+
+    plt.tight_layout()
+    plt.show()
+def make_plot_eval_results_of_a_graph(info):
     results = info[0]
 
     init_groups = {}
@@ -357,76 +397,190 @@ def plot_eval_results_of_a_graph(info):
 
     plt.tight_layout()
     plt.show()
+"""-------------------------------------------------------------Make plot functions-------------------------------------------------------------"""
+"""-------------------------------------------------------------Data gathetring functions-------------------------------------------------------------"""
+
+def weighted_vs_unweighted_undirected(method, sample_type):
+    weighted_unweighted = dt.get_data_weighted_unweighted_undirected(method, sample_type)
+    baseline = dt.load_results_file(f"Outputs/Baseline-RAG/baseline_results.json")['Baseline'][sample_type][0]['recall']
+    categories = weighted_unweighted.keys()
+    weighted = []
+    unweighted = []
+    for graph in weighted_unweighted.keys():
+        weighted.append(weighted_unweighted[graph]['weighted'][1])
+        unweighted.append(weighted_unweighted[graph]['unweighted'][1])
+
+
+    x = np.arange(len(categories))
+    plt.figure(figsize=(18, 6))
+    plt.bar(x - 0.2, weighted, width=0.4, label='Weighted')
+    plt.bar(x + 0.2, unweighted, width=0.4, label='Unweighted')
+    plt.xticks(x + 0.6, categories, rotation=10, ha='right', fontsize=7)
+
+    plt.axhline(
+        y=baseline,
+        color='red',
+        linestyle='--',
+        linewidth=2,
+        label='Baseline RAG'
+    )
+    plt.xlabel('Graphs')
+    plt.ylabel('Recall')
+    plt.title('Weighted vs Unweighted')
+    plt.legend()
+    plt.show()
+
+
+def undirected_vs_directed_weighted(method, sample_type):
+    directed_undirected = dt.get_data_undirected_directed_weighted(method, sample_type)
+    baseline = dt.load_results_file(f"Outputs/Baseline-RAG/baseline_results.json")['Baseline'][sample_type][0]['recall']
+    categories = directed_undirected.keys()
+    directed = []
+    undirected = []
+    for graph in directed_undirected.keys():
+        directed.append(directed_undirected[graph]['directed'][1])
+        undirected.append(directed_undirected[graph]['undirected'][1])
+
+    x = np.arange(len(categories))
+    plt.figure(figsize=(18, 6))
+    plt.bar(x - 0.2, directed, width=0.4, label='Directed')
+    plt.bar(x + 0.2, undirected, width=0.4, label='Undirected')
+    plt.xticks(x + 0.6, categories, rotation=10, ha='right', fontsize=7)
+    plt.axhline(
+        y=baseline,
+        color='red',
+        linestyle='--',
+        linewidth=2,
+        label='Baseline RAG'
+    )
+    plt.xlabel('Graphs')
+    plt.ylabel('Recall')
+    plt.title('Directed vs Undirected')
+    plt.legend()
+    plt.show()
+
+def undirected_vs_directed_unweighted(method, sample_type):
+    directed_undirected = dt.get_data_undirected_directed_unweighted(method, sample_type)
+    baseline = dt.load_results_file(f"Outputs/Baseline-RAG/baseline_results.json")['Baseline'][sample_type][0]['recall']
+    categories = directed_undirected.keys()
+    directed = []
+    undirected = []
+    for graph in directed_undirected.keys():
+        directed.append(directed_undirected[graph]['directed'][1])
+        undirected.append(directed_undirected[graph]['undirected'][1])
+    x = np.arange(len(categories))
+    plt.figure(figsize=(18, 6))
+    plt.bar(x - 0.2, directed, width=0.4, label='Directed')
+    plt.bar(x + 0.2, undirected, width=0.4, label='Undirected')
+    plt.xticks(x + 0.6, categories, rotation=10, ha='right', fontsize=7)
+    plt.axhline(
+        y=baseline,
+        color='red',
+        linestyle='--',
+        linewidth=2,
+        label='Baseline RAG'
+    )
+    plt.xlabel('Graphs')
+    plt.ylabel('Recall')
+    plt.title('Directed Unweighted vs Undirected')
+    plt.legend()
+    plt.show()
 
 
 
-def getting_plot_retrieval_stats(sorted_by):
-    files = dt.get_files()
-    info_to_plot_knn = {}
-    info_to_plot_knn['small'] = []
-    info_to_plot_knn['medium'] = []
-    info_to_plot_knn['long'] = []
-    info_to_plot_knn['all_samples'] = []
-    info_to_plot_mutual_knn = {}
-    info_to_plot_mutual_knn['small'] = []
-    info_to_plot_mutual_knn['medium'] = []
-    info_to_plot_mutual_knn['long'] = []
-    info_to_plot_mutual_knn['all_samples'] = []
-    info_to_plot_kmeans_knn = {}
-    info_to_plot_kmeans_mutual_knn = {}
 
-    for file in files:
-        #eval_results = dt.load_eval_results(file)
-        grouped_results = dt.load_grouped_results(file, sorted_by)
-        params, info = dt.load_graph_parameters(file)
-        if params['graph_type'] == "knn graph":
-            info_to_plot_knn['small'].append((grouped_results['PPR']['small'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_knn['medium'].append((grouped_results['PPR']['medium'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_knn['long'].append((grouped_results['PPR']['long'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_knn['all_samples'].append((grouped_results['PPR']['all_samples'], params['Graph building algorithm params']['n_neighbors']))
-        elif params['graph_type'] == "mutual knn graph":
-            info_to_plot_mutual_knn['small'].append((grouped_results['PPR']['small'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_mutual_knn['medium'].append((grouped_results['PPR']['medium'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_mutual_knn['long'].append((grouped_results['PPR']['long'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_mutual_knn['all_samples'].append((grouped_results['PPR']['all_samples'], params['Graph building algorithm params']['n_neighbors']))
-        elif params['graph_type'] == "kmeans knn graph":
-            info_to_plot_kmeans_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('small', []).append((grouped_results['PPR']['small'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_kmeans_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('medium', []).append((grouped_results['PPR']['medium'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_kmeans_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('long', []).append((grouped_results['PPR']['long'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_kmeans_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('all_samples', []).append((grouped_results['PPR']['all_samples'], params['Graph building algorithm params']['n_neighbors']))
-        elif params['graph_type'] == "kmeans mutual knn graph":
-            info_to_plot_kmeans_mutual_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('small', []).append((grouped_results['PPR']['small'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_kmeans_mutual_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('medium', []).append((grouped_results['PPR']['medium'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_kmeans_mutual_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('long', []).append((grouped_results['PPR']['long'], params['Graph building algorithm params']['n_neighbors']))
-            info_to_plot_kmeans_mutual_knn.setdefault(params['clustering']['n_clusters'], {}).setdefault('all_samples', []).append((grouped_results['PPR']['all_samples'], params['Graph building algorithm params']['n_neighbors']))
+def clustering_vs_not_clustering(method, sample_type):
+    clustering_not_clustering = dt.get_data_clustering_not_clustering(method, sample_type)
+    baseline = dt.load_results_file(f"Outputs/Baseline-RAG/baseline_results.json")['Baseline'][sample_type][0]['recall']
+    categories = list(clustering_not_clustering.keys())
 
-    #plot_eval_results_of_a_graph(info_to_plot_knn['small'][0])
-    #plot_eval_results_of_a_graph(info_to_plot_knn['medium'][0])
-    #plot_eval_results_of_a_graph(info_to_plot_knn['long'][0])
-    #plot_eval_results_of_a_graph(info_to_plot_knn['all_samples'][0])
-    #print(info_to_plot_knn['small'][0][1]['knn']['n_neighbors'])
-    info_to_plot_knn['small'].sort(key=lambda x: x[1])
-    info_to_plot_knn['medium'].sort(key=lambda x: x[1])
-    info_to_plot_knn['long'].sort(key=lambda x: x[1])
-    info_to_plot_knn['all_samples'].sort(key=lambda x: x[1])
+    clustering_vals = []
+    no_clustering_vals = []
 
-    info_to_plot_mutual_knn['small'].sort(key=lambda x: x[1])
-    info_to_plot_mutual_knn['medium'].sort(key=lambda x: x[1])
-    info_to_plot_mutual_knn['long'].sort(key=lambda x: x[1])
-    info_to_plot_mutual_knn['all_samples'].sort(key=lambda x: x[1])
+    for graph_type in categories:
+        clustering_avg = max(clustering_not_clustering[graph_type]["clustering"])
+        no_clustering_avg = max(clustering_not_clustering[graph_type]["no_clustering"])
 
-    for cluster, sample_types in info_to_plot_kmeans_knn.items():
-        for sample_type, rows in sample_types.items():
-            rows.sort(key=lambda x: x[1])
+        clustering_vals.append(clustering_avg)
+        no_clustering_vals.append(no_clustering_avg)
 
-    for cluster, sample_types in info_to_plot_kmeans_mutual_knn.items():
-        for sample_type, rows in sample_types.items():
-            rows.sort(key=lambda x: x[1])
+    x = np.arange(len(categories))
+    width = 0.35
 
-    plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, info_to_plot_kmeans_knn, info_to_plot_kmeans_mutual_knn,"small")
-    plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, info_to_plot_kmeans_knn, info_to_plot_kmeans_mutual_knn,"medium")
-    plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, info_to_plot_kmeans_knn, info_to_plot_kmeans_mutual_knn,"long")
-    plot_eval_results(info_to_plot_knn, info_to_plot_mutual_knn, info_to_plot_kmeans_knn, info_to_plot_kmeans_mutual_knn,"all_samples")
+    plt.figure(figsize=(12, 6))
+
+    plt.bar(x - width/2, clustering_vals, width, label="Clustering")
+    plt.bar(x + width/2, no_clustering_vals, width, label="No Clustering")
+    plt.axhline(
+        y=baseline,
+        color='red',
+        linestyle='--',
+        linewidth=2,
+        label='Baseline RAG'
+    )
+
+    plt.xticks(x, categories)
+    plt.xlabel("Graph Type")
+    plt.ylabel("Recall")
+    plt.title("Clustering vs No Clustering")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
+def ppr_vs_k_steph_graph_aware(sample_type):
+        ppr_k_steph_graph_aware = dt.get_data_ppr_vs_ksteph(sample_type)
+        baseline = dt.load_results_file(f"Outputs/Baseline-RAG/baseline_results.json")['Baseline'][sample_type][0][
+            'recall']
+        categories = ppr_k_steph_graph_aware.keys()
+        #print(categories)
+        ppr_vals = []
+        k_steph_vals = []
+        for graph_type in ppr_k_steph_graph_aware.keys():
+            kmeans_avg = max(ppr_k_steph_graph_aware[graph_type]['PPR'])
+            not_clustering_avg = max(ppr_k_steph_graph_aware[graph_type]['k-steph_graph_aware'])
+            ppr_vals.append(kmeans_avg)
+            k_steph_vals.append(not_clustering_avg)
+
+        x = np.arange(len(categories))
+        plt.figure(figsize=(18, 6))
+        plt.bar(x - 0.2, k_steph_vals, width=0.4, label='graph_aware')
+        plt.bar(x + 0.2, ppr_vals, width=0.4, label='PPR')
+        plt.axhline(
+            y=baseline,
+            color='red',
+            linestyle='--',
+            linewidth=2,
+            label='Baseline RAG'
+        )
+
+        plt.xticks(x + 0.6, categories, rotation=10, ha='right', fontsize=7)
+        plt.xlabel('Graphs')
+        plt.ylabel('Recall')
+        plt.title('PPR vs K-steph graph aware')
+        plt.legend()
+        plt.show()
+
+"""-------------------------------------------------------------Data gathetring functions-------------------------------------------------------------"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -468,8 +622,63 @@ def convert(obj):
     if isinstance(obj, (list, tuple)): return [convert(i) for i in obj]
     return obj
 
-
 def print_graph_stats(graph):
+
+    graph_info = {}
+
+
+    graph_info["Nodes"] = graph.number_of_nodes()
+    graph_info["Edges"] = graph.number_of_edges()
+    graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
+    graph_info["Graph Density"] = nx.density(graph)
+    graph_info["top_degree_nodes"] = sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
+
+    is_directed = graph.is_directed()
+    if is_directed:
+        g_ig = ig.Graph.from_networkx(graph)
+        g_ig = g_ig.as_undirected(mode="collapse", combine_edges="max")
+    else:
+        g_ig = ig.Graph.from_networkx(graph)
+    graph = []
+    if is_directed:
+        mode_cc = "strong"
+    else:
+        mode_cc = "weak"
+
+    components = g_ig.connected_components(mode=mode_cc)
+    graph_info["Number of connected components"] = len(components)
+    graph_info["largest_component_size"] = max((len(c) for c in components), default=0)
+    partition = g_ig.community_multilevel(weights="weight")
+    node_names = g_ig.vs["_nx_name"]
+    community_list = [set(node_names[idx] for idx in cluster) for cluster in partition]
+
+
+    mod = partition.modularity
+    graph_info["Number of communities"] = (len(community_list), mod)
+
+    local_cluster_coefficients = g_ig.transitivity_local_undirected(
+        weights="weight"
+    )
+
+    graph_info["avg_clustering"] = float(np.nanmean(local_cluster_coefficients))
+
+    #closeness_values = g_ig.closeness(weights="weight")
+    #closeness_pairs = list(zip(node_names, closeness_values))
+    #graph_info["top_closeness_nodes"] = sorted(
+        #closeness_pairs, key=lambda x: x[1], reverse=True
+    #)[:10]
+
+
+    #betweenness_values = g_ig.betweenness(weights="weight")
+    #betweenness_pairs = list(zip(node_names, betweenness_values))
+    #graph_info["top_betweenness_nodes"] = sorted(
+    #    betweenness_pairs, key=lambda x: x[1], reverse=True
+    #)[:10]
+
+    graph_info = {k: convert(v) for k, v in graph_info.items()}
+    return graph_info
+
+def print_graph_stats_(graph):
 
     graph_info = {}
 

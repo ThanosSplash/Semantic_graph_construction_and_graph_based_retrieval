@@ -3,24 +3,84 @@
 Method                                                           Recall      MRR       nDCG      MAP       
 Graph                                             
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
-PPR | k=10 | a=0.2 | init=5                                      0.4858      0.8205    0.6940    0.4061                                                      
-PPR | k=10 | a=0.2 | init=2                                      0.4835      0.8187    0.6904    0.4060                                                      
-PPR | k=10 | a=0.5 | init=5                                      0.4703      0.8333    0.6798    0.3923                                                      
-PPR | k=10 | a=0.5 | init=2                                      0.4671      0.8462    0.6837    0.3970                                                      
-PPR | k=10 | a=0 | init=10                                       0.4616      0.7414    0.6229    0.3355                                                      
-PPR | k=10 | a=0.2 | init=20                                     0.4600      0.8269    0.6712    0.3901                                                      
-PPR | k=10 | a=0.5 | init=20                                     0.4567      0.8526    0.6704    0.3844                                                      
-PPR | k=10 | a=0.2 | init=10                                     0.4556      0.8269    0.6589    0.3695                                                      
-PPR | k=10 | a=0.2 | init=50                                     0.4556      0.8237    0.6656    0.3817                                                      
-PPR | k=10 | a=0.8 | init=2                                      0.4539      0.8526    0.6696    0.3854                                                      
-PPR | k=10 | a=0.5 | init=50                                     0.4511      0.8333    0.6642    0.3820                                                      
-PPR | k=10 | a=0.8 | init=5                                      0.4511      0.8526    0.6666    0.3823                                                      
-PPR | k=10 | a=0.5 | init=10                                     0.4500      0.8333    0.6621    0.3781                                                      
-PPR | k=10 | a=0.8 | init=20                                     0.4484      0.8526    0.6638    0.3798                                                      
-PPR | k=10 | a=0.8 | init=50                                     0.4484      0.8333    0.6605    0.3781                                                      
-PPR | k=10 | a=0 | init=5                                        0.4477      0.7667    0.6223    0.3397                                                      
-PPR | k=10 | a=0.8 | init=10                                     0.4445      0.8526    0.6613    0.3782                                                      
-PPR | k=10 | a=0 | init=2                                        0.4206      0.8077    0.6185    0.3460                                                      
-PPR | k=10 | a=0 | init=20                                       0.4190      0.7041    0.5936    0.3194                                                      
-PPR | k=10 | a=0 | init=50                                       0.3640      0.6193    0.5232    0.2701                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=5 | hops=2  0.5616      0.8889    0.7350    0.4741                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=5 | hops=4  0.5587      0.8889    0.7307    0.4673                                                      
+PPR | k=10 | a=0.2 | init=5                                      0.5567      0.8889    0.7378    0.4760                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=5 | hops=2  0.5567      0.8889    0.7378    0.4760                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=5 | hops=3  0.5567      0.8889    0.7378    0.4760                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=5 | hops=4  0.5567      0.8889    0.7378    0.4760                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=5 | hops=3  0.5565      0.8889    0.7303    0.4681                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=5 | hops=2  0.5525      0.9556    0.7398    0.4738                                                      
+PPR | k=10 | a=0.2 | init=2                                      0.5462      0.9556    0.7497    0.4926                                                      
+PPR | k=10 | a=0.5 | init=2                                      0.5406      0.9556    0.7384    0.4683                                                      
+PPR | k=10 | a=0.5 | init=5                                      0.5358      0.8889    0.7151    0.4509                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=2 | hops=2  0.5352      0.9556    0.7394    0.4789                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=2 | hops=2  0.5352      0.9556    0.7393    0.4782                                                      
+PPR | k=10 | a=0.2 | init=10                                     0.5351      0.9000    0.7170    0.4518                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=10 | hops=2 0.5351      0.9000    0.7170    0.4518                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=10 | hops=3 0.5351      0.9000    0.7170    0.4518                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=10 | hops=4 0.5351      0.9000    0.7170    0.4518                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=2 | hops=3  0.5301      0.9556    0.7350    0.4738                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=2 | hops=4  0.5301      0.9556    0.7301    0.4623                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=5 | hops=3  0.5259      0.9556    0.7237    0.4582                                                      
+PPR | k=10 | a=0.5 | init=10                                     0.5252      0.9222    0.7125    0.4466                                                      
+PPR | k=10 | a=0.8 | init=2                                      0.5252      0.9556    0.7216    0.4534                                                      
+PPR | k=10 | a=0.8 | init=5                                      0.5252      0.9556    0.7206    0.4521                                                      
+PPR | k=10 | a=0.8 | init=10                                     0.5252      0.9556    0.7206    0.4521                                                      
+PPR | k=10 | a=0.8 | init=20                                     0.5252      0.9556    0.7210    0.4530                                                      
+PPR | k=10 | a=0.8 | init=50                                     0.5252      0.9500    0.7193    0.4510                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=10 | hops=2 0.5252      0.9222    0.7125    0.4466                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=10 | hops=3 0.5252      0.9222    0.7125    0.4466                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=10 | hops=4 0.5252      0.9222    0.7125    0.4466                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=5 | hops=4  0.5252      0.9556    0.7208    0.4530                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=10 | hops=2 0.5252      0.9556    0.7206    0.4521                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=10 | hops=3 0.5252      0.9556    0.7206    0.4521                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=10 | hops=4 0.5252      0.9556    0.7206    0.4521                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=20 | hops=2 0.5252      0.9556    0.7210    0.4530                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=20 | hops=3 0.5252      0.9556    0.7210    0.4530                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=20 | hops=4 0.5252      0.9556    0.7210    0.4530                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=50 | hops=2 0.5252      0.9500    0.7193    0.4510                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=50 | hops=3 0.5252      0.9500    0.7193    0.4510                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=50 | hops=4 0.5252      0.9500    0.7193    0.4510                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=2 | hops=2  0.5220      0.9556    0.7292    0.4720                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=2 | hops=3  0.5220      0.9556    0.7292    0.4720                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=2 | hops=4  0.5220      0.9556    0.7292    0.4720                                                      
+PPR | k=10 | a=0.5 | init=50                                     0.5219      0.9222    0.7125    0.4454                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=50 | hops=2 0.5219      0.9222    0.7125    0.4454                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=50 | hops=3 0.5219      0.9222    0.7125    0.4454                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=50 | hops=4 0.5219      0.9222    0.7125    0.4454                                                      
+PPR | k=10 | a=0.5 | init=20                                     0.5203      0.9222    0.7110    0.4435                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=20 | hops=2 0.5203      0.9222    0.7110    0.4435                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=20 | hops=3 0.5203      0.9222    0.7110    0.4435                                                      
+k-steph | k=10 | a=0.5 | reranker=graph_aware | init=20 | hops=4 0.5203      0.9222    0.7110    0.4435                                                      
+PPR | k=10 | a=0.2 | init=20                                     0.5190      0.8556    0.7017    0.4420                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=20 | hops=2 0.5190      0.8556    0.7017    0.4420                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=20 | hops=3 0.5190      0.8556    0.7017    0.4420                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=20 | hops=4 0.5190      0.8556    0.7017    0.4420                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=2 | hops=3  0.5167      0.9556    0.7250    0.4623                                                      
+PPR | k=10 | a=0 | init=10                                       0.5123      0.8833    0.6874    0.4229                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=10 | hops=2   0.5123      0.8833    0.6874    0.4229                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=10 | hops=3   0.5123      0.8833    0.6874    0.4229                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=10 | hops=4   0.5123      0.8833    0.6874    0.4229                                                      
+PPR | k=10 | a=0 | init=5                                        0.5086      0.8889    0.6911    0.4404                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=5 | hops=2    0.5086      0.8889    0.6911    0.4404                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=5 | hops=3    0.5086      0.8889    0.6911    0.4404                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=5 | hops=4    0.5086      0.8889    0.6911    0.4404                                                      
+k-steph | k=10 | a=0.8 | reranker=graph_aware | init=2 | hops=4  0.5009      0.9556    0.7098    0.4403                                                      
+PPR | k=10 | a=0 | init=20                                       0.4902      0.7556    0.6324    0.3703                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=20 | hops=2   0.4902      0.7556    0.6324    0.3703                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=20 | hops=3   0.4902      0.7556    0.6324    0.3703                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=20 | hops=4   0.4902      0.7556    0.6324    0.3703                                                      
+PPR | k=10 | a=0.2 | init=50                                     0.4879      0.8556    0.6721    0.4183                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=50 | hops=2 0.4879      0.8556    0.6721    0.4183                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=50 | hops=3 0.4879      0.8556    0.6721    0.4183                                                      
+k-steph | k=10 | a=0.2 | reranker=graph_aware | init=50 | hops=4 0.4879      0.8556    0.6721    0.4183                                                      
+PPR | k=10 | a=0 | init=2                                        0.4622      0.9556    0.6668    0.4058                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=2 | hops=2    0.4622      0.9556    0.6668    0.4058                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=2 | hops=3    0.4622      0.9556    0.6668    0.4058                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=2 | hops=4    0.4622      0.9556    0.6668    0.4058                                                      
+PPR | k=10 | a=0 | init=50                                       0.3798      0.6844    0.5024    0.2633                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=50 | hops=2   0.3798      0.6844    0.5024    0.2633                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=50 | hops=3   0.3798      0.6844    0.5024    0.2633                                                      
+k-steph | k=10 | a=0 | reranker=graph_aware | init=50 | hops=4   0.3798      0.6844    0.5024    0.2633                                                      
 

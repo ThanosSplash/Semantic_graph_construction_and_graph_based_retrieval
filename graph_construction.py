@@ -52,15 +52,16 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_para
                 if graph_params["Weighted"] == True:
                     G.add_edge(ids[i], ids[j], weight=sim)
                 else:
-                    G.add_edge(ids[i], ids[j])
+                    G.add_edge(ids[i], ids[j], weight=1.0)
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
         config = {}
         config["graph_type"] = "threshold graph"
-        config["threshold"] = threshold_params
+        config["Graph building algorithm params"] = threshold_params
         config["preprocess"] = preprocess
         config["graph_construction"] = graph_params
+        config["Graph building algorithm"] = "Threshold"
         dt.save_graph_data(config, name)
         dt.save_graph(G, name)
 
@@ -166,7 +167,7 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
                     G.add_edge(node_id, ids[nearest], weight=sim)
                 else:
                     # Not weighted graph
-                    G.add_edge(node_id, ids[nearest])
+                    G.add_edge(node_id, ids[nearest], weight=1.0)
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
 
@@ -177,6 +178,7 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
         config["Graph building algorithm params"] = knn_params
         config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
+        config["Graph building algorithm"] = "KNN"
 
         dt.save_graph_data(config, name)
         dt.save_graph(G, name)
@@ -225,7 +227,7 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
                     G.add_edge(ids[id], ids[neighbor], weight=sim)
                 else:
                     # Not weighted graph
-                    G.add_edge(ids[id], ids[neighbor])
+                    G.add_edge(ids[id], ids[neighbor], weight=1.0)
 
     print(f"Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
     if save == True:
@@ -235,6 +237,7 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
         config["Graph building algorithm params"] = knn_params
         config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
+        config["Graph building algorithm"] = "MUTUAL KNN"
         dt.save_graph_data(config, name)
         dt.save_graph(G, name)
 
@@ -310,7 +313,7 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
     dt.save_graph_data(config, graph_id, clustering_results["fig"])
     dt.save_graph(mutual_knn_g, graph_id)
 
-def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, save):
+def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, save, clustering_algo):
         """Building a semantic graph using thershold method but the data is pre clustered using kmeans or dbscan
                clustering_results: A dictionary with the pre clustered data and other information for the
                clustering
@@ -339,8 +342,8 @@ def build_clustering_threshold_graph(clustering_results, threshold_params, graph
         config["clustering"] = clustering_results["clustering_params"]
         config["preprocess"] = (
         str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
-        config["graph_type"] = "clustering threshold graph"
-        config["Building graph algorithm params"] = threshold_params
+        config["graph_type"] = f"{clustering_algo} threshold graph"
+        config["Graph building algorithm params"] = threshold_params
         config["graph_params"] = graph_params
         config["Graph building algorithm"] = "Threshold"
         graph_id =  name

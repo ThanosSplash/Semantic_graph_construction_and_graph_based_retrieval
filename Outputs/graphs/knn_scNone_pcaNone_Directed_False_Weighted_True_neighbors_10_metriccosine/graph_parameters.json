@@ -17,5 +17,6 @@
     "preprocess": [
         "None",
         "None"
-    ]
+    ],
+      "Graph building algorithm": "KNN"
 }
