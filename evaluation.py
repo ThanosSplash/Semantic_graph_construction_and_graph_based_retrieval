@@ -34,8 +34,8 @@ def nDCGk_score(predictions, ground_truth, k, gains="linear"):
     # Calculating dcg
     dcg = dcg_score(y_true, gains)
     # Ideal binary scores
-    ideal_len = min(len(correct_set), k)
-    ideal_y_true = np.ones(ideal_len)
+    denominator = min(len(correct_set), k)
+    ideal_y_true = np.ones(denominator)
     # Calculating idcg
     idcg = dcg_score(ideal_y_true, gains)
     return dcg / idcg
@@ -55,14 +55,14 @@ def recallk_score(predictions, correct_results, k):
 
     return correct_guess/len(correct_results)
 
-def RR_score(predictions, correct_results):
+def RR_score(predictions, correct_results, k):
     # Function that calculates the rank score
     correct_set = set(correct_results)
     for indx, prediction in enumerate(predictions):
         if prediction in correct_set:
             return 1/(indx + 1), indx
 
-    return 0, -1
+    return 0, 9999
 
 
 def MRR_score(rr_scores):
@@ -76,6 +76,7 @@ def avg_precision(predictions, correct_results, k):
 
     correct_guess = 0
     correct_set = set(correct_results)
+    denominator = min(len(correct_set), k)
     sums = 0
     for i, prediction in enumerate(predictions):
         if i >= k:
@@ -87,7 +88,7 @@ def avg_precision(predictions, correct_results, k):
     if len(correct_results) == 0:
         return 0
 
-    return sums/len(correct_results)
+    return sums/denominator
 
 
 #def nDCGk_score(predictions, correct_results, k):

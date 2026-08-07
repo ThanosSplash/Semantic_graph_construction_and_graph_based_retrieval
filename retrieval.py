@@ -5,6 +5,7 @@ import networkx as nx
 from scipy.sparse import csr_matrix
 from queue import PriorityQueue
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from sentence_transformers import CrossEncoder
 from collections import defaultdict
@@ -16,13 +17,27 @@ import time
 
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
-
+def fusion(nodes, sim_scores, graph_scores, alpha):
+    final_scores = []
+    for node_id in nodes:
+        score = alpha * sim_scores[node_id] + (1 - alpha) * graph_scores[node_id]
+        final_scores.append((node_id, score))
+    final_scores.sort(key=lambda x: -x[1])
+    return final_scores
 def normalize(scores):
     min_s, max_s = scores.min(), scores.max()
     if max_s - min_s == 0:
         return np.zeros_like(scores)
     return (scores - min_s) / (max_s - min_s)
 
+def normalize_dict(scores):
+    keys = list(scores.keys())
+    values = np.array(list(scores.values()), dtype=float).reshape(-1, 1)
+
+    scaler = MinMaxScaler()
+    normalized = scaler.fit_transform(values).flatten()
+
+    return dict(zip(keys, normalized))
 def get_neighbors(graph, init_node, hops, current_hop=1, visited=None,  hop_map=None):
     # Function that calculates the neighbors nodes. The exploration range depends on the hops
     """Given the semantic graph , the init node and the number of hops find the
@@ -185,7 +200,7 @@ def bm25_scores_for_query(query_id, retrieved_ids):
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 """-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
-def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, adjacency, node_to_idx, global_node_list):
+def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, adjacency, node_to_idx, global_node_list, norm = "True"):
     """Given the retrieved ids using the similarity score and personalised pagerank score (graph score)
        to make a new rankings for them
        graph: The semantic graph
@@ -201,11 +216,13 @@ def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, 
 
     # Calculating graph score using personalised pagerank
     graph_scores = ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids, adjacency, node_to_idx, global_node_list)
-    # Calculating total scores for each node
-    for i, node_id in enumerate(retrieved_ids):
-        graph_score = graph_scores[node_id]
-        score = alpha * sim_dict[node_id] + (1 - alpha) * graph_score
-        final_scores.append((node_id, score))
+    if norm is True:
+        sim_norm = normalize_dict(sim_dict)
+        ppr_norm = normalize_dict(graph_scores)
+        final_scores = fusion(retrieved_ids, sim_norm, ppr_norm, alpha)
+    else:
+        # Calculating total scores for each node
+        final_scores = fusion(retrieved_ids, sim_dict, graph_scores, alpha)
 
     final_scores.sort(key=lambda x: -x[1])
     return final_scores
@@ -296,7 +313,7 @@ def top_k(query_id, k):
    return pred_results, query_correct_results, pred_sim
 
 
-def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_nodes, sims, k, query_id, alpha):
+def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_nodes, sims, k, query_id, alpha, norm=True):
     """Given the init ids using the personalised pagerank algorithm
         to calculate the graph score for every node in the graph
         retrieve the topk nodes with the highest score
@@ -330,9 +347,13 @@ def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_
     graph_scores = dict(zip(graph.nodes(), scores_personal))
     sim_dict, query_correct_results = sim_scores_for_query(query_id)
     final_scores = []
-    for node_id in graph.nodes:
-            score = alpha * sim_dict[node_id] + (1 - alpha) * graph_scores[node_id]
-            final_scores.append((node_id, score))
+    if norm is True:
+        sim_norm = normalize_dict(sim_dict)
+        graph_norm = normalize_dict(graph_scores)
+        final_scores = fusion(graph.nodes, sim_norm, graph_norm, alpha)
+    else:
+        final_scores = fusion(graph.nodes, sim_dict, graph_scores, alpha)
+
     # Sorting based on final score and taking the topk
     final_scores.sort(key=lambda x: -x[1])
     return [node for node, _ in final_scores[:k]]

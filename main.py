@@ -134,43 +134,43 @@ def make_graphs(c):
 
      for pre in preprocess_combinations:
         preprocess = {"scaler": pre["scaler"], "pca": pre["pca"]}
+        pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
 
 
 
         # ── knn_Graph ────────────────────────────────────────────────────────
-        #for knn_combo in grid_combinations(knn_grid):
-            #knn_params = merge(BASE_KNN, knn_combo)
-            #name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
-            #print(f"[knn_Graph]   {name}")
-            #gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            #count+=1
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
+            print(f"[knn_Graph]   {name}")
+            gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+            count+=1
 
         # ── mutual_knn ───────────────────────────────────────────────────────
-       #for knn_combo in grid_combinations(knn_grid):
-            #knn_params = merge(BASE_KNN, knn_combo)
-            #name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
-            #print(f"[mutual_knn]  {name}")
-            #gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            #count+=1
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
+            print(f"[mutual_knn]  {name}")
+            gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+            count+=1
         # ── threshold_graph ───────────────────────────────────────────────────────
-        #for threshold_combo in grid_combinations(threshold_grid):
-            #threshold_params = merge(BASE_THRESHOLD, threshold_combo)
-            #name = make_name(f"threshold_{pre_tag}", threshold_combo, graph_params)
-            #gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
-            #results.append(("threshold", name, threshold_combo, preprocess))
+        for threshold_combo in grid_combinations(threshold_grid):
+            threshold_params = merge(BASE_THRESHOLD, threshold_combo)
+            name = make_name(f"threshold_{pre_tag}", threshold_combo, graph_params)
+            gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
+            results.append(("threshold", name, threshold_combo, preprocess))
         # ── kmeans clustering ───────────────────────────────────────────────────────
-        #for kmeans_combo in grid_combinations(kmeans_grid):
-            #kmeans_params = merge(BASE_KMEANS, kmeans_combo)
-            #clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
-             #                                          agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            #for knn_combo in grid_combinations(knn_grid):
-                #knn_params = merge(BASE_KNN, knn_combo)
+        for kmeans_combo in grid_combinations(kmeans_grid):
+            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
+            for knn_combo in grid_combinations(knn_grid):
+                knn_params = merge(BASE_KNN, knn_combo)
 
-                #name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
-                #gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
-                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                #                                     False, "kmeans")
-                #count += 2
+                name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
+                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,False, "kmeans")
+                count += 2
         for kmeans_combo in grid_combinations(kmeans_grid):
             kmeans_params = merge(BASE_KMEANS, kmeans_combo)
             clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
@@ -268,7 +268,7 @@ def get_kmeans_input():
     return kmeans_combo
 
 
-def make_query_samples():
+def make_dev_query_split():
     q, a, c = dt.load_texts()
     q_emb, _, _ = dt.load_data()
     vectorizer = TfidfVectorizer()
@@ -280,8 +280,6 @@ def make_query_samples():
         n = len(analyzer(text))
         query = q_emb[qid]
         query_correct_results = query[1]
-        if len(query_correct_results) < 5:
-            continue
 
         if n <= p33:
             label = "small"
@@ -293,74 +291,81 @@ def make_query_samples():
         query_labels[qid] = label
 
     print(len(query_labels.keys()))
-    total_sample = int(len(query_labels) * 0.02)
+    total_sample = int(len(query_labels) * 0.04)
     each_label_size = total_sample // 3
     print(each_label_size)
     small_queries = []
     medium_queries = []
     long_queries = []
-    for qid, label in query_labels.items():
-        if label == "small" and len(small_queries) < each_label_size:
-            small_queries.append(qid)
-        elif label == "medium" and len(medium_queries) < each_label_size:
-            medium_queries.append(qid)
-        elif label == "long" and len(long_queries) < each_label_size:
-            long_queries.append(qid)
-    print(len(small_queries))
-    print(len(medium_queries))
-    print(len(long_queries))
-    dt.save_samples(small_queries, medium_queries, long_queries)
+    rng = np.random.default_rng(42)
 
-def run_eval_tests():
+    small_pool = [qid for qid, l in query_labels.items() if l == "small"]
+    medium_pool = [qid for qid, l in query_labels.items() if l == "medium"]
+    long_pool = [qid for qid, l in query_labels.items() if l == "long"]
+    small_queries = rng.choice(
+        small_pool,
+        size=min(each_label_size, len(small_pool)),
+        replace=False
+    ).tolist()
 
-    predictions = ["A", "B", "C", "D"]
-    ground_truth = ["C", "X"]
+    medium_queries = rng.choice(
+        medium_pool,
+        size=min(each_label_size, len(medium_pool)),
+        replace=False
+    ).tolist()
 
-    print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=2)}")
-    print(f"Mine ndcg@k {ev.nDCGk_score(predictions = predictions, ground_truth=ground_truth, k=4)}")
-    print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print("-----------------------------------------------------")
-    predictions = ["C", "B", "X", "D"]
-    ground_truth = ["C", "B", "X"]
-    print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=4)}")
-    print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print("-----------------------------------------------------")
+    long_queries = rng.choice(
+        long_pool,
+        size=min(each_label_size, len(long_pool)),
+        replace=False
+    ).tolist()
 
-    predictions = ["A", "E", "F"]
-    ground_truth = ["A", "B", "X"]
-    print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=3)}")
-    print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=3)}")
-    print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=3)}")
-    print("-----------------------------------------------------")
+    print(small_queries)
+    #print(len(medium_queries))
+    #print(len(long_queries))
+    #dt.sanity_check(small_queries + medium_queries + long_queries)
+    dt.save_split(small_queries, medium_queries, long_queries, f"Data/splits", "dev")
 
-    predictions = ["E", "F", "A"]
-    ground_truth = ["A", "B", "X"]
-    print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=3)}")
-    print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=3)}")
-    print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=3)}")
-    print("-----------------------------------------------------")
+def make_test_split():
+    q, a = dt.load_texts_tests()
+    q_emb, _ = dt.load_data_tests()
+    vectorizer = TfidfVectorizer()
+    analyzer = vectorizer.build_analyzer()
+    query_labels = {}
+    lengths = [len(analyzer(text)) for text in q.values()]
+    p33, p66 = np.percentile(lengths, [33, 66])
+    for qid, text in q.items():
+        n = len(analyzer(text))
+        query = q_emb[qid]
+        if n <= p33:
+            label = "small"
+        elif n <= p66:
+            label = "medium"
+        else:
+            label = "long"
 
+        query_labels[qid] = label
 
-    predictions = ["A", "I", "E", "D"]
-    ground_truth = ["C", "B", "X"]
-    print(f"recall@k {ev.recallk_score(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print(f"Mrr {ev.RR_score(predictions=predictions, correct_results=ground_truth)}")
-    print(f"Mine ndcg@k {ev.nDCGk_score(predictions=predictions, ground_truth=ground_truth, k=4)}")
-    print(f"map@k {ev.avg_precision(predictions=predictions, correct_results=ground_truth, k=4)}")
-    print("-----------------------------------------------------")
+    print(len(query_labels.keys()))
+    small_queries = []
+    medium_queries = []
+    long_queries = []
+    rng = np.random.default_rng(42)
+
+    small_pool = [qid for qid, l in query_labels.items() if l == "small"]
+    medium_pool = [qid for qid, l in query_labels.items() if l == "medium"]
+    long_pool = [qid for qid, l in query_labels.items() if l == "long"]
+    #print(small_pool)
+    #print(medium_pool)
+    #print(long_pool)
+    #dt.sanity_check(small_pool + medium_pool + long_pool)
+    dt.save_split(small_pool, medium_pool, long_pool, f"Data/splits", "test")
 
 
 if __name__ == "__main__":
 
-
-    MODE = str(input("Choose Mode, Make graphs, Run eval tests, Make a test graph, Run a test retrieval, "
-                     "Run retrieval, Make embeddings, Make Global leaderboard, Graph performance, plot graph stats, "
-                     "make query samples, make tables: "))
+    MODE = str(input("Choose Mode, Make graphs, Make a test graph, Run experiments, Make embeddings Graph performance "
+                     "make query samples: "))
 
 
     #MODE = ""
@@ -369,142 +374,19 @@ if __name__ == "__main__":
         make_graphs(c)
     elif MODE.lower() == "make embeddings":
         ex.prepare_dataset()
-    elif MODE.lower() == "run retrieval":
-        METHOD = input("Choose method, Baseline, PPR, K steph, Hits, Shortest Path: ").strip()
-        if METHOD.lower() == "ppr":
-            ex.run_retrieval_ppr()
-        elif METHOD.lower() == "k steph":
-           #ex.run_retrieval_k_steph()
-           ex.run_retrieval_k_steph(dt.get_top_5_best_performing_graphs("PPR", "all_samples", f"Outputs/graphs"))
-    elif MODE.lower() == "run eval tests":
-        run_eval_tests()
-    elif MODE.lower() == "make global leaderboard":
-        tables.make_global_leaderboard()
+    elif MODE.lower() == "run experiments":
+        METHOD = input("Examples: ").strip()
+        if METHOD.lower() == "examples":
+            ex.run_an_baseline()
+            ex.run_an_example_retrieval_ppr()
+            ex.run_an_example_retrieval_k_steph()
+            ex.ppr_score_calibration_study()
+        ex.run_retrieval_ppr_deep_sensitivity_experiment()
     elif MODE.lower() == "make query samples":
-        make_query_samples()
+        make_dev_query_split()
     elif MODE.lower() == "graph performance":
         GRAPH_NAME = input("Graph name: ").strip()
         dt.graph_perf(GRAPH_NAME)
-    elif MODE.lower() == "plot graph stats":
-        METHOD = input("clustering vs not clustering, weighted vs unweighted, "
-                       "directed vs undirected, ppr vs k-steph: ").strip()
-        if METHOD.lower() == "clustering vs not clustering":
-            pt.clustering_vs_not_clustering("PPR", "all_samples")
-        elif METHOD.lower() == "weighted vs unweighted":
-            pt.weighted_vs_unweighted_undirected("PPR", "all_samples")
-        elif METHOD.lower() == "directed vs undirected":
-            WEI_UNWEI = input("weighted or unweighted ").strip()
-            if WEI_UNWEI.lower() == "weighted":
-                pt.undirected_vs_directed_weighted('PPR', "all_samples")
-            elif WEI_UNWEI.lower() == "unweighted":
-                pt.undirected_vs_directed_unweighted('PPR', "all_samples")
-        elif METHOD.lower() == "ppr vs k-steph":
-            pt.ppr_vs_k_steph_graph_aware('all_samples')
-
-
-        #pt.getting_plot_graph_stats()
-    elif MODE.lower() == "make tables":
-        tables.make_graph_construction_sensitivity_table()
-        files = dt.get_files(f"Outputs/graphs")
-        for file in files:
-
-            tables.make_init_sensitivity_table(file)
-            tables.make_alpha_sensitivity_table(file)
-            tables.make_query_table(file)
-    elif MODE.lower() == "run a test retrieval":
-        METHOD = input("Choose method, Baseline, PPR, K steph, Hits, Shortest Path: ").strip()
-        small, medium, long = dt.load_samples()
-        files = dt.get_files()
-        file = 'mutual_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine'
-        all_samples = small + medium + long
-        metrics = ["recall", "rr", "ndcg", "avg_precisions"]
-        k = int(input("k (int): ").strip())
-        print(file)
-        eval_scores = None
-        params = None
-        start_time = time.perf_counter()
-        if METHOD.lower() == "baseline":
-            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                scores, p, predictions_per_query, relevant_passage_ids_per_query = ex.baseline_search(dataset, k, "Outputs/Baseline-RAG", name)
-                if eval_scores is None:
-                    eval_scores, params = scores, p
-                else:
-                    for m in metrics:
-                        eval_scores[m] += scores[m]
-            params["sample_type"] = "all_samples"
-            ex.rearrange_results_and_save_for_all_samples("Baseline", eval_scores, "Outputs/Baseline-RAG", params)
-
-        elif METHOD.lower() == "ppr":
-            graph = dt.load_graph(file)
-            init = int(input("init (int): ").strip())
-            if init <= 0 :
-                raise ValueError(f"Negative Value Error: {init}")
-            alpha = float(input("alpha (float): ").strip())
-            if alpha < 0.0 or alpha > 1.0 :
-                raise ValueError(f"Οut Οf Βounds Error: {alpha}")
-            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                scores, p = ex.personalised_pagerank_search(dataset, graph, k, f"Outputs/graphs/{file}", init, name, alpha, file)
-                if eval_scores is None:
-                    eval_scores, params = scores, p
-                else:
-                    for m in metrics:
-                        eval_scores[m] += scores[m]
-            params["sample_type"] = "all_samples"
-            ex.rearrange_results_and_save_for_all_samples("PPR", eval_scores, f"Outputs/graphs/{file}", params)
-        elif METHOD.lower() == "k steph":
-            graph = dt.load_graph(file)
-            init = int(input("init (int): ").strip())
-            if init <= 0:
-                raise ValueError(f"Negative Value Error: {init}")
-            alpha = float(input("alpha (float): ").strip())
-            if alpha < 0.0 or alpha > 1.0:
-                raise ValueError(f"Οut Οf Βounds Error: {alpha}")
-            k_step = int(input("k_steph (int): ").strip())
-            if k_step <= 0:
-                raise ValueError(f"Negative Value Error: {k_step}")
-            RERANKER = str(input("Choose reranker, BM25, graph_aware, cross_encoder: "))
-            if RERANKER not in rerankers:
-                raise ValueError(f"Wrong reranker input {RERANKER}")
-            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-
-                scores, p = ex.k_steph_search(dataset, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, name,file)
-                if eval_scores is None:
-                    eval_scores, params = scores, p
-                else:
-                    for m in metrics:
-                        eval_scores[m] += scores[m]
-            params["sample_type"] = "all_samples"
-            ex.rearrange_results_and_save_for_all_samples("k-steph", eval_scores, f"Outputs/graphs/{file}", params)
-
-
-            #ex.k_steph_search(small, graph, RERANKER, k, k_step, alpha,f"Outputs/graphs/{file}", init, "small")
-            #ex.k_steph_search(medium, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "medium")
-            #ex.k_steph_search(long, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "long")
-            #ex.k_steph_search(all_samples, graph, RERANKER, k, k_step, alpha, f"Outputs/graphs/{file}", init, "all_samples")
-        elif METHOD.lower() == "hits":
-            ex.hits_search()
-        elif METHOD.lower() == "shortest path":
-            graph = dt.load_graph(file)
-            init = int(input("init (int): ").strip())
-            if init <= 0:
-                raise ValueError(f"Negative Value Error: {init}")
-            alpha = float(input("alpha (float): ").strip())
-            if alpha < 0.0 or alpha > 1.0:
-                raise ValueError(f"Οut Οf Βounds Error: {alpha}")
-            RERANKER = str(input("Choose reranker, BM25, graph_aware, cross_encoder: "))
-            if RERANKER not in rerankers:
-                raise ValueError(f"Wrong reranker input {RERANKER}")
-            ex.shortest_path_search(small, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "small")
-            ex.shortest_path_search(medium, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "medium")
-            ex.shortest_path_search(long, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "long")
-            #ex.shortest_path_search(all_samples, graph, RERANKER, k, alpha, f"Outputs/graphs/{file}", init, "all_samples")
-        else:
-            raise ValueError(f"Wrong Retrieval Method: {METHOD}")
-        end_time = time.perf_counter()
-        execution_time = end_time - start_time
-        print(f"Time: {execution_time:.4f} seconds")
-        tables.save_leaderboard(f"Outputs/graphs/{file}", "leaderboards")
-        dt.seperate_results(file)
     elif MODE.lower() == "make a test graph":
         q, a, c = dt.load_data()
         preprocess, graph_params = get_preprocess_graph_input()

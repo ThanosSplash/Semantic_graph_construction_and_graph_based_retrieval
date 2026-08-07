@@ -20,10 +20,12 @@ def make_embeddings(text_data):
     # Transforming each question and answer one on one into an embedding and filling the two dictionaries
     for row in tqdm(text_data.itertuples(), total=len(text_data)):
         embedding = model.encode(row.question, show_progress_bar=False, convert_to_numpy=True)
-        embeddings_questions[row.id] = (embedding, row.relevant_passage_ids, row.question)
+        relevant_ids = [int(id) for id in row.relevant_passage_ids]
+        embeddings_questions[row.id] = (embedding, relevant_ids, row.question)
         text_questions[row.id] = row.question
         embedding = model.encode(row.answer, show_progress_bar=False, convert_to_numpy=True)
-        embeddings_answers[row.id] = (embedding, row.relevant_passage_ids)
+        relevant_ids = [int(id) for id in row.relevant_passage_ids]
+        embeddings_answers[row.id] = (embedding, relevant_ids)
         text_answers[row.id] = row.answer
 
     return embeddings_questions, embeddings_answers, text_answers, text_questions

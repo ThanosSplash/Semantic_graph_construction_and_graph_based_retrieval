@@ -58,6 +58,7 @@ def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_para
     if save == True:
         config = {}
         config["graph_type"] = "threshold graph"
+        config["graph_name"] = f"threshold graph threshold = {threshold_params['threshold_distance']}"
         config["Graph building algorithm params"] = threshold_params
         config["preprocess"] = preprocess
         config["graph_construction"] = graph_params
@@ -175,6 +176,7 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
         # Saving the graph
         config = {}
         config["graph_type"] = "knn graph"
+        config["graph_name"] = f"knn graph neighbors = {knn_params['n_neighbors']}"
         config["Graph building algorithm params"] = knn_params
         config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
@@ -234,6 +236,7 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
         # Saving the graph
         config = {}
         config["graph_type"] = "mutual knn graph"
+        config["graph_name"] = f"mutual knn graph neighbors = {knn_params['n_neighbors']}"
         config["Graph building algorithm params"] = knn_params
         config["graph_construction"] = graph_params
         config["preprocess"] = (str(preprocess["scaler"]), str( preprocess["pca"]))
@@ -270,6 +273,8 @@ def build_clustering_knn_graph(clustering_results, knn_params, graph_params, pre
     config = {}
     config["clustering"] = clustering_results["clustering_params"]
     config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+    config["graph_name"] = (f"{clustering_algo} knn graph = {knn_params['n_neighbors']} "
+                            f"clusters = {clustering_results['clustering_params']['n_clusters']}")
     config["graph_type"] = f"{clustering_algo} knn graph"
     config["Graph building algorithm params"] = knn_params
     config["graph_params"] = graph_params
@@ -306,6 +311,8 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
     config["clustering"] = clustering_results["clustering_params"]
     config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
     config["graph_type"] = f"{clustering_algo} mutual knn graph"
+    config["graph_name"] = (f"{clustering_algo} mutual knn graph = {knn_params['n_neighbors']} "
+                            f"clusters = {clustering_results['clustering_params']['n_clusters']}")
     config["Graph building algorithm params"] = knn_params
     config["graph_params"] = graph_params
     config["Graph building algorithm"] = "MUTUAL KNN"
@@ -340,9 +347,12 @@ def build_clustering_threshold_graph(clustering_results, threshold_params, graph
         # Saving the graph and info about its construction
         config = {}
         config["clustering"] = clustering_results["clustering_params"]
+
         config["preprocess"] = (
         str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
         config["graph_type"] = f"{clustering_algo} threshold graph"
+        config["graph_name"] = (f"{clustering_algo} threshold graph threshold = {threshold_params['threshold_distance']} "
+                                f"clusters = {clustering_results['clustering_params']['n_clusters']}")
         config["Graph building algorithm params"] = threshold_params
         config["graph_params"] = graph_params
         config["Graph building algorithm"] = "Threshold"
