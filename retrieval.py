@@ -5,7 +5,8 @@ import networkx as nx
 from scipy.sparse import csr_matrix
 from queue import PriorityQueue
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, FunctionTransformer, StandardScaler
+from sklearn.pipeline import make_pipeline
 import numpy as np
 from sentence_transformers import CrossEncoder
 from collections import defaultdict
@@ -17,6 +18,26 @@ import time
 
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
+def get_dev_test_queries(query_type):
+    if query_type == "dev":
+        q, _, _ = dt.load_data()
+        return q
+    elif query_type == "test":
+        q, _ = dt.load_data_tests()
+        return q
+    else:
+        raise ValueError(f"Wrong Query type: {query_type}")
+
+def get_dev_test_queries_texts(query_type):
+    if query_type == "dev":
+        q, _, _ = dt.load_texts()
+        return q
+    elif query_type == "test":
+        q, _ = dt.load_texts_tests()
+        return q
+    else:
+        raise ValueError(f"Wrong Query type: {query_type}")
+
 def fusion(nodes, sim_scores, graph_scores, alpha):
     final_scores = []
     for node_id in nodes:
@@ -30,14 +51,27 @@ def normalize(scores):
         return np.zeros_like(scores)
     return (scores - min_s) / (max_s - min_s)
 
-def normalize_dict(scores):
-    keys = list(scores.keys())
-    values = np.array(list(scores.values()), dtype=float).reshape(-1, 1)
+def normalize_dict(scores, norm_pipeline):
+    if norm_pipeline == "log + Min_Max":
+        norm_data = make_pipeline(
+            FunctionTransformer(lambda x: np.log(x + 1e-12), validate=True),
+            MinMaxScaler()
+        )
+    elif norm_pipeline == "Min_Max":
+        norm_data = make_pipeline(
+            MinMaxScaler()
+        )
+    elif norm_pipeline == "z_score":
+        norm_data = make_pipeline(
+            StandardScaler()
+        )
+    else:
+        raise ValueError(f"Wrong norm pipeline {norm_pipeline}")
 
-    scaler = MinMaxScaler()
-    normalized = scaler.fit_transform(values).flatten()
+    values = np.array(list(scores.values())).reshape(-1, 1)
+    normalized = norm_data.fit_transform(values).flatten()
 
-    return dict(zip(keys, normalized))
+    return dict(zip(scores.keys(), normalized))
 def get_neighbors(graph, init_node, hops, current_hop=1, visited=None,  hop_map=None):
     # Function that calculates the neighbors nodes. The exploration range depends on the hops
     """Given the semantic graph , the init node and the number of hops find the
@@ -152,13 +186,14 @@ def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids, adjacency, node_
     node_scores = {node: score for node, score in node_scores if node in retrieved_ids}
     return node_scores
 
-def sim_scores_for_query(query_id, retrieved_ids=None):
+def sim_scores_for_query(query_id, query_type,retrieved_ids=None):
     """Given the query id calculates the cosine similarity for all the documents in the corpus
        query_id: The id of the query
        retrieved_ids: Used when need to calculate the cosine similarity only for those documents
     """
     # Loading the embeddings
-    q, _, c = dt.load_data()
+    q = get_dev_test_queries(query_type)
+    _, _, c = dt.load_data()
     # Safety check
     if query_id not in q:
         raise Exception(f"Id not found {query_id}")
@@ -181,44 +216,50 @@ def sim_scores_for_query(query_id, retrieved_ids=None):
     sim_dict = dict(zip(documents, sims))
 
     return sim_dict, query_correct_results
-def bm25_scores_for_query(query_id, retrieved_ids):
-    # Loading the texts for the queries and the corpus
-    q_text, _, c_text = dt.load_texts()
-    # Safety check
+def bm25_scores_for_query(query_id, query_type, retrieved_ids=None):
+    q = get_dev_test_queries(query_type)
+    _, _, c_text = dt.load_texts()
+    q_text = get_dev_test_queries_texts(query_type)
+
     if query_id not in q_text:
         raise Exception(f"Id not found {query_id}")
+
     query_text = q_text[query_id]
+    query = q[query_id]
+    query_correct_results = query[1]
 
-    # Gathering the texts of the retrieved data
-    texts = [c_text[id] for id in retrieved_ids]
-    # Calculating the similarities and bm25 scores
-    bm25 = BM25Okapi([t.split() for t in texts])
-    bm25_scores = np.array(bm25.get_scores(query_text.split()))
-    bm25_norm = normalize(bm25_scores)
+    all_ids = list(c_text.keys())
+    all_texts = [c_text[id] for id in all_ids]
+    bm25 = BM25Okapi([t.split() for t in all_texts])
+    all_scores = np.array(bm25.get_scores(query_text.split()))
+    scores = dict(zip(all_ids, all_scores))
 
-    return sorted(zip(retrieved_ids, bm25_norm), key=lambda x: x[1], reverse=True)
+    if retrieved_ids is not None:
+        scores = {id: scores[id] for id in retrieved_ids}
 
+    return scores, query_correct_results
+def fusion_scores_for_query(query_id, query_type, retrieved_ids=None, alpha = 0.5):
+    cosine_scores, query_correct_results = sim_scores_for_query(query_id, query_type, retrieved_ids)
+    bm25_scores, _ = bm25_scores_for_query(query_id, query_type, retrieved_ids)
+    fusion_scores = {}
+    for id in cosine_scores.keys():
+        fusion_scores[id] = cosine_scores[id]*alpha + bm25_scores[id]*(1-alpha)
+    return fusion_scores, query_correct_results
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 """-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
-def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, adjacency, node_to_idx, global_node_list, norm = "True"):
+def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, adjacency, node_to_idx, query_type, global_node_list, norm_pipeline):
     """Given the retrieved ids using the similarity score and personalised pagerank score (graph score)
        to make a new rankings for them
-       graph: The semantic graph
-       query_id: The id of the query
-       retrieved_ids: The ids that the retriever method retrieved
-       init_nodes: The node to init personalised pagerank algorithm
-       sims: Similarities for the personalised pagerank algorithm
-       alpha: Variable used to calculate the final score
     """
     # Calculating cosine sim
-    sim_dict, query_correct_results = sim_scores_for_query(query_id, retrieved_ids)
+    sim_dict, query_correct_results = sim_scores_for_query(query_id, query_type, retrieved_ids)
     final_scores = []
 
     # Calculating graph score using personalised pagerank
     graph_scores = ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids, adjacency, node_to_idx, global_node_list)
-    if norm is True:
-        sim_norm = normalize_dict(sim_dict)
-        ppr_norm = normalize_dict(graph_scores)
+    if norm_pipeline != "":
+        sim_norm = normalize_dict(sim_dict, norm_pipeline)
+        ppr_norm = normalize_dict(graph_scores, norm_pipeline)
         final_scores = fusion(retrieved_ids, sim_norm, ppr_norm, alpha)
     else:
         # Calculating total scores for each node
@@ -227,7 +268,7 @@ def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, 
     final_scores.sort(key=lambda x: -x[1])
     return final_scores
 
-def rerank_cross_encoder(query_id, retrieved_ids):
+def rerank_cross_encoder(query_id, query_type, retrieved_ids):
     """Given the retrieved ids using the cross encoder function to make a new rankings for them
            query_id: The id of the query
            retrieved_ids: The ids that the retriever method retrieved
@@ -247,7 +288,7 @@ def rerank_cross_encoder(query_id, retrieved_ids):
     #if len(retrieved_ids) > 50:
     if len(retrieved_ids) > 50:
         #filtered = bm25_scores_for_query(query_id, retrieved_ids)[:80]
-        filtered = rerank_bm25(query_id, retrieved_ids)[:20]
+        filtered = rerank_bm25(query_id, query_type, retrieved_ids)[:20]
         ids = [node_id for node_id, _ in filtered]
     else:
         ids = retrieved_ids
@@ -265,17 +306,14 @@ def rerank_cross_encoder(query_id, retrieved_ids):
     return final_scores
 
 
-def rerank_bm25(query_id, retrieved_ids, alpha=0.5):
+def rerank_bm25(query_id, query_type, retrieved_ids, alpha=0.5):
     """Given the retrieved ids using the BM25 function to make a new rankings for them
-               query_id: The id of the query
-               retrieved_ids: The ids that the retriever method retrieved
-               alpha: Variable used to calculate the final score
     """
     # Calculate and Normalise the scores for cosine sim and bm25
-    sim_dict, query_correct_results = sim_scores_for_query(query_id, retrieved_ids)
+    sim_dict, query_correct_results = sim_scores_for_query(query_id, query_type, retrieved_ids)
     sim_scores = np.array([sim_dict[id] for id in retrieved_ids])
     # Normalise the scores
-    bm25_norm = dict(bm25_scores_for_query(query_id, retrieved_ids))
+    bm25_norm, _ = bm25_scores_for_query(query_id, query_type, retrieved_ids)
     sim_norm = normalize(sim_scores)
 
     final_scores = [
@@ -283,22 +321,27 @@ def rerank_bm25(query_id, retrieved_ids, alpha=0.5):
         for i, node_id in enumerate(retrieved_ids)
     ]
     final_scores.sort(key=lambda x: -x[1])
-
-
     return final_scores
+
+
 """-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
 
 """-------------------------------------------------------------Retrieval Techniques-------------------------------------------------------------"""
 
 
-def top_k(query_id, k):
+def top_k(query_id, query_type, sim_function, k):
    """Given a query and the number of the documents to be retrieved,
       retrieve the topk documents using cosine similarity
-      query_id : The id of the query
-      k: number of items to be retrieved
    """
    # Calculating similarities
-   sim_dict, query_correct_results = sim_scores_for_query(query_id)
+   if sim_function == "cosine":
+       sim_dict, query_correct_results = sim_scores_for_query(query_id, query_type)
+   elif sim_function == "bm25":
+       sim_dict, query_correct_results = bm25_scores_for_query(query_id, query_type)
+   elif sim_function == "fusion":
+       sim_dict, query_correct_results = fusion_scores_for_query(query_id, query_type)
+   else:
+       raise ValueError(f"Wrong similarity function {sim_function}")
 
    # Sort by similarity descending
    sorted_docs = sorted(
@@ -313,18 +356,11 @@ def top_k(query_id, k):
    return pred_results, query_correct_results, pred_sim
 
 
-def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_nodes, sims, k, query_id, alpha, norm=True):
+def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_nodes, sims, k, query_id, alpha, query_type, norm_pipeline):
     """Given the init ids using the personalised pagerank algorithm
         to calculate the graph score for every node in the graph
         retrieve the topk nodes with the highest score
-    graph: The semantic graph
-    init_nodes: The node to init personalised pagerank algorithm
-    sims: Similarities for the personalised pagerank algorithm
-    retrieved_ids: The ids that the retriever method retrieved
-    alpha: Variable used to calculate the final score
-    k: number of items to be retrieved
     """
-    # Making the adjacency matrix and calculating the weights for the init nodes
     # Safety check
     valid_indices = []
     valid_scores = []
@@ -345,11 +381,11 @@ def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_
     # Calculating the graph score and similarity score for all the nodes
     scores_personal = pagerank.fit_predict(adjacency, weights)
     graph_scores = dict(zip(graph.nodes(), scores_personal))
-    sim_dict, query_correct_results = sim_scores_for_query(query_id)
+    sim_dict, query_correct_results = sim_scores_for_query(query_id, query_type)
     final_scores = []
-    if norm is True:
-        sim_norm = normalize_dict(sim_dict)
-        graph_norm = normalize_dict(graph_scores)
+    if norm_pipeline != "":
+        sim_norm = normalize_dict(sim_dict, norm_pipeline)
+        graph_norm = normalize_dict(graph_scores, norm_pipeline)
         final_scores = fusion(graph.nodes, sim_norm, graph_norm, alpha)
     else:
         final_scores = fusion(graph.nodes, sim_dict, graph_scores, alpha)
@@ -359,17 +395,10 @@ def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_
     return [node for node, _ in final_scores[:k]]
 
 
-def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, sims, reranker_type, adjacency=None, node_to_idx=None, global_node_list=None):
+def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, sims, reranker_type, query_type, norm_pipeline,
+                                  adjacency=None, node_to_idx=None, global_node_list=None):
     """Given the init ids and the query id retrieve the topk items using three different types of
        reranker function
-        graph: The semantic graph
-        init_nodes: The node to init the k steph algorithm
-        sims: Similarities for the personalised pagerank algorithm
-        reranker_type: Name of the reranker function to use
-        hops: For the get_neighbors function. How far to expand through the graph
-        alpha: Variable used to calculate the final score
-        k: number of items to be retrieved
-        query_id: The id of the query
         """
     # Finding the neighbors
     neighbors = list(get_neighbors(graph, init_nodes, hops))
@@ -379,11 +408,12 @@ def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, s
     final_scores = []
     # Using a reranked function
     if reranker_type == "graph_aware":
-        final_scores = rerank_graph_aware(graph, query_id, neighbors, init_nodes, sims, alpha, adjacency, node_to_idx, global_node_list)
+        final_scores = rerank_graph_aware(graph, query_id, neighbors, init_nodes, sims, alpha, adjacency, node_to_idx,
+                                          query_type, global_node_list, norm_pipeline)
     elif reranker_type == "cross_encoder":
-        final_scores = rerank_cross_encoder(query_id, neighbors)
+        final_scores = rerank_cross_encoder(query_id, query_type, neighbors)
     elif reranker_type == "BM25":
-        final_scores = rerank_bm25(query_id, neighbors, alpha)
+        final_scores = rerank_bm25(query_id, query_type, neighbors, alpha)
     # Get the topk and making two lists for the ids and the  score
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]
@@ -418,7 +448,7 @@ def hits(graph, root_set, k, max_iter=300):
     return [n for n, _ in top[:k]]
 
 
-def shortest_path(graph, query_id, init_nodes, k, alpha, sims, reranker_type):
+def shortest_path(graph, query_id, init_nodes, k, alpha, sims, reranker_type, query_type, norm_pipeline):
     """Given the graph find the shortest path between the init_nodes and using the rerankers find the nodes with the
     highest score
     graph: The semantic graph
@@ -438,11 +468,11 @@ def shortest_path(graph, query_id, init_nodes, k, alpha, sims, reranker_type):
     # Calculating the final score based on the chosen reranker
     final_scores = []
     if reranker_type == "graph_aware":
-        final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, init_nodes, sims, alpha)
+        final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, init_nodes, sims, alpha, query_type, norm_pipeline)
     elif reranker_type == "cross_encoder":
-        final_scores = rerank_cross_encoder(query_id, nodes_in_path)
+        final_scores = rerank_cross_encoder(query_id, query_type, nodes_in_path)
     elif reranker_type == "BM25":
-        final_scores = rerank_bm25(query_id, nodes_in_path, alpha)
+        final_scores = rerank_bm25(query_id, query_type, nodes_in_path, alpha)
     # Choosing the topk and return the ids and its scores
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]

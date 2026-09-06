@@ -46,7 +46,7 @@ def pipeline(data, scaler, pca):
         pca.fit(data_scaled)
         variance = pca.explained_variance_ratio_
         cumulative_variance = np.cumsum(variance)
-        threshold_variance = 0.85
+        threshold_variance = 0.95
         n_components = np.argmax(cumulative_variance >= threshold_variance) + 1
         pca_plot = PCA(n_components=n_components)
         data_pca = pca_plot.fit_transform(data_scaled)
@@ -129,7 +129,7 @@ def dbscan(data, dbscan_params, preprocess):
     data_preprocessed = pipeline(embeddings, preprocess["scaler"], preprocess["pca"])
 
 
-    dbscan_ = DBSCAN(eps=dbscan_params["eps"], metric="cosine")
+    dbscan_ = DBSCAN(eps=dbscan_params["eps"], min_samples = dbscan_params["min_samples"], metric="cosine")
     clusters = dbscan_.fit_predict(data_preprocessed)
 
     unique_clusters = np.unique(clusters)
@@ -142,12 +142,11 @@ def dbscan(data, dbscan_params, preprocess):
 
 
 
-def perform_clustering(data, algorithm, kmeans_params, dbscan_params, agglo_params, preprocess):
+def perform_clustering(data, algorithm, kmeans_params,
+                       dbscan_params, agglo_params, preprocess):
     if algorithm == "kmeans":
         unique_clusters, clustering_labels, ids, embeddings, fig = kmeans(data, kmeans_params, agglo_params,
-                                                                             scaler=preprocess["scaler"],
-                                                                             pca=preprocess["pca"],
-                                                                             pipeline_id=kmeans_params["pipeline_id"])
+                                                            scaler=preprocess["scaler"],pca=preprocess["pca"],pipeline_id=kmeans_params["pipeline_id"])
         clustering_result = {
             "unique_clusters": unique_clusters,
             "clustering_labels": clustering_labels,

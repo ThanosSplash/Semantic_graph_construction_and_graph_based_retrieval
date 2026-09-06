@@ -14,36 +14,30 @@ import clustering as cl
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from datetime import datetime
 import uuid
+import itertools
+from copy import deepcopy
+
 
 import nx_parallel
 def build_threshold_graph(corpus, threshold_params, preprocess, name, graph_params, save):
     if len(corpus) == 0:
-        print("Warning: empty cluster, skipping.")
         return nx.Graph()
-
     if graph_params["Directed"] == False:
         G = nx.Graph()
     else:
         G = nx.DiGraph()
-
     ids = list(corpus.keys())
     embeddings = np.array(list(corpus.values()))
-
-
     data = cl.pipeline(
         embeddings,
         scaler=preprocess["scaler"],
         pca=preprocess["pca"]
     )
 
-
     for id in ids:
         G.add_node(id)
     sim_matrix = cosine_similarity(data)
-
     threshold = threshold_params["threshold_distance"]
-
-
     n = len(ids)
     for i in range(n):
         for j in range(i + 1, n):
@@ -77,17 +71,6 @@ def run_knn(data, preprocess, knn_params):
     knn_params: parameters for the kth nearest neighbors algorithm
     """
 
-    try:
-        # If gpu exists
-        import cuml
-        from cuml.neighbors import NearestNeighbors
-        is_gpu = True
-    except ImportError:
-        # If doesnt gpu exist
-        from sklearn.neighbors import NearestNeighbors
-        print("Running on CPU using scikit-learn")
-        is_gpu = False
-
     ids = list(data.keys())
     embeddings = np.array(list(data.values()))
     # Preprocessing the data embeddings
@@ -98,25 +81,7 @@ def run_knn(data, preprocess, knn_params):
     else:
         # if the embeddings are less than the n_neighbors drop the number of neighbors
        neighbors = len(data)
-    if is_gpu:
-        # If gpu perform knn in gpu
-        if hasattr(data_pre, 'astype'):
-            data_pre = data_pre.astype(np.float32)
-
-        # Safety check because the gpu knn lib doesn't have all the metrics
-        allowed_gpu_metrics = ['l2', 'euclidean', 'cosine', 'correlation', 'manhattan']
-        metric = knn_params["metric"] if knn_params["metric"] in allowed_gpu_metrics else 'euclidean'
-
-        nn = NearestNeighbors(
-            n_neighbors=neighbors,
-            metric=metric,
-            algorithm='brute',
-            p=knn_params["p"]
-        )
-        print("Gpu knn")
-    else:
-        # If only cpu exists use the sklearn libary
-        nn = NearestNeighbors(
+    nn = NearestNeighbors(
             n_neighbors=neighbors, metric=knn_params["metric"],
             algorithm=knn_params["algorithm"], radius=knn_params["radius"],
             leaf_size=knn_params["leaf_size"], p=knn_params["p"],
@@ -125,9 +90,6 @@ def run_knn(data, preprocess, knn_params):
 
     nn.fit(data_pre)
     distances, indices = nn.kneighbors(data_pre)
-    if is_gpu:
-         indices = indices.to_numpy() if hasattr(indices, 'to_numpy') else indices
-         distances = distances.to_numpy() if hasattr(distances, 'to_numpy') else distances
     return indices, distances, ids
 
 def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
@@ -141,7 +103,6 @@ def build_knn_graph(data, knn_params, preprocess, name, graph_params, save):
        save: when its true save the graph when false dont save the graph
     """
     if len(data) == 0:
-        print("Warning: empty cluster, skipping.")
         return nx.Graph()
 
     if graph_params["Directed"] == False:
@@ -200,7 +161,6 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
            save: when its true save the graph when false dont save the graph
         """
     if len(data) == 0:
-        print("Warning: empty cluster, skipping.")
         return nx.Graph()
     if graph_params["Directed"] == False:
         # Not directed graph
@@ -246,7 +206,8 @@ def build_mutual_knn_graph(data, knn_params, preprocess, name, graph_params, sav
 
     return G
 
-def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save, clustering_algo):
+def build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess,
+                               name, save_cluster_graphs, clustering_algo, save_total_graph):
     """Building a semantic graph using knn but the data is pre clustered using kmeans or dbscan
        clustering_results: A dictionary with the pre clustered data and other information for the
        clustering
@@ -264,26 +225,28 @@ def build_clustering_knn_graph(clustering_results, knn_params, graph_params, pre
             for i, label in enumerate(clustering_results["clustering_labels"])
             if label == cluster_id
         }
-        graph = build_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, save)
+        graph = build_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, save_cluster_graphs)
         if graph.number_of_nodes() > 0:
             graphs_knn.append(graph)
     # Merging all the graphs in one
     knn_g = nx.compose_all(graphs_knn)
     # Saving the graph and info about its construction
-    config = {}
-    config["clustering"] = clustering_results["clustering_params"]
-    config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
-    config["graph_name"] = (f"{clustering_algo} knn graph = {knn_params['n_neighbors']} "
-                            f"clusters = {clustering_results['clustering_params']['n_clusters']}")
-    config["graph_type"] = f"{clustering_algo} knn graph"
-    config["Graph building algorithm params"] = knn_params
-    config["graph_params"] = graph_params
-    config["Graph building algorithm"] = "KNN"
-    graph_id = name
-    dt.save_graph_data(config, graph_id, clustering_results["fig"])
-    dt.save_graph(knn_g, graph_id)
-    return
-def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,name, save, clustering_algo):
+    if save_total_graph is True:
+        config = {}
+        config["clustering"] = clustering_results["clustering_params"]
+        config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+        config["graph_name"] = (f"{clustering_algo} knn graph neighbors = {knn_params['n_neighbors']} "
+                                f"clusters = {clustering_results['clustering_params']['n_clusters']}")
+        config["graph_type"] = f"{clustering_algo} knn graph"
+        config["Graph building algorithm params"] = knn_params
+        config["graph_params"] = graph_params
+        config["Graph building algorithm"] = "KNN"
+        graph_id = name
+        dt.save_graph_data(config, graph_id, clustering_results["fig"])
+        dt.save_graph(knn_g, graph_id)
+    return knn_g
+def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess,
+                                      name, save_cluster_graphs, clustering_algo, save_total_graph):
     """Building a semantic graph using mutual knn but the data is pre clustered using kmeans or dbscan
            clustering_results: A dictionary with the pre clustered data and other information for the
            clustering
@@ -301,26 +264,29 @@ def build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_para
             for i, label in enumerate(clustering_results["clustering_labels"])
             if label == cluster_id
         }
-        graph =build_mutual_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, save)
+        graph =build_mutual_knn_graph(cluster_nodes, knn_params, clustering_results["preprocess"], "", graph_params, save_cluster_graphs)
         if graph.number_of_nodes() > 0:
             graphs_mutal_knn.append(graph)
     # Merging all the graphs in one
     mutual_knn_g = nx.compose_all(graphs_mutal_knn)
     # Saving the graph and info about its construction
-    config = {}
-    config["clustering"] = clustering_results["clustering_params"]
-    config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
-    config["graph_type"] = f"{clustering_algo} mutual knn graph"
-    config["graph_name"] = (f"{clustering_algo} mutual knn graph = {knn_params['n_neighbors']} "
-                            f"clusters = {clustering_results['clustering_params']['n_clusters']}")
-    config["Graph building algorithm params"] = knn_params
-    config["graph_params"] = graph_params
-    config["Graph building algorithm"] = "MUTUAL KNN"
-    graph_id = "mutual_" + name
-    dt.save_graph_data(config, graph_id, clustering_results["fig"])
-    dt.save_graph(mutual_knn_g, graph_id)
+    if save_total_graph is True:
+        config = {}
+        config["clustering"] = clustering_results["clustering_params"]
+        config["preprocess"] = (str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+        config["graph_type"] = f"{clustering_algo} mutual knn graph"
+        config["graph_name"] = (f"{clustering_algo} mutual knn graph neighbors = {knn_params['n_neighbors']} "
+                                f"clusters = {clustering_results['clustering_params']['n_clusters']}")
+        config["Graph building algorithm params"] = knn_params
+        config["graph_params"] = graph_params
+        config["Graph building algorithm"] = "MUTUAL KNN"
+        graph_id = "mutual_" + name
+        dt.save_graph_data(config, graph_id, clustering_results["fig"])
+        dt.save_graph(mutual_knn_g, graph_id)
+    return mutual_knn_g
 
-def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, save, clustering_algo):
+def build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess,
+                                     name, save_cluster_graphs, clustering_algo, save_total_graph):
         """Building a semantic graph using thershold method but the data is pre clustered using kmeans or dbscan
                clustering_results: A dictionary with the pre clustered data and other information for the
                clustering
@@ -339,32 +305,226 @@ def build_clustering_threshold_graph(clustering_results, threshold_params, graph
                 if label == cluster_id
             }
             graph = build_threshold_graph(cluster_nodes, threshold_params, clustering_results["preprocess"], "",
-                                           graph_params, save)
+                                           graph_params, save_cluster_graphs)
             if graph.number_of_nodes() > 0:
                 graphs_threshold.append(graph)
         # Merging all the graphs in one
         threshold_g = nx.compose_all(graphs_threshold)
         # Saving the graph and info about its construction
-        config = {}
-        config["clustering"] = clustering_results["clustering_params"]
+        if save_total_graph is True:
+            config = {}
+            config["clustering"] = clustering_results["clustering_params"]
 
-        config["preprocess"] = (
-        str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
-        config["graph_type"] = f"{clustering_algo} threshold graph"
-        config["graph_name"] = (f"{clustering_algo} threshold graph threshold = {threshold_params['threshold_distance']} "
-                                f"clusters = {clustering_results['clustering_params']['n_clusters']}")
-        config["Graph building algorithm params"] = threshold_params
-        config["graph_params"] = graph_params
-        config["Graph building algorithm"] = "Threshold"
-        graph_id =  name
-        dt.save_graph_data(config, graph_id, clustering_results["fig"])
-        dt.save_graph(threshold_g, graph_id)
-
-
-
-
+            config["preprocess"] = (
+            str(clustering_results["preprocess"]["scaler"]), str(clustering_results["preprocess"]["pca"]))
+            config["graph_type"] = f"{clustering_algo} threshold graph"
+            config["graph_name"] = (f"{clustering_algo} threshold graph threshold = {threshold_params['threshold_distance']} "
+                                    f"clusters = {clustering_results['clustering_params']['n_clusters']}")
+            config["Graph building algorithm params"] = threshold_params
+            config["graph_params"] = graph_params
+            config["Graph building algorithm"] = "Threshold"
+            graph_id = name
+            dt.save_graph_data(config, graph_id, clustering_results["fig"])
+            dt.save_graph(threshold_g, graph_id)
+        return threshold_g
 
 
 
 
+kmeans_grid = {
+    "n_clusters": [5, 10, 20],
+    "init":       ["k-means++"],
+    "random_state": [1, 7, 21, 42, 84]
+}
+
+knn_grid = {
+    "n_neighbors": [5, 10, 20],
+    "metric":      ["cosine"]
+}
+threshold_grid = {
+    "threshold_distance": [0.8, 0.6, 0.4]
+
+}
+
+dbscan_grid = {
+    "eps":         [0.5],
+    "min_samples": [10],
+}
+
+agglo_grid = {
+    "linkage":            ["ward", "complete", "average"],
+    "distance_threshold": [None],
+    "n_clusters":         [3, 4],
+}
+
+graph_combinations = [{"Directed": False, "Weighted": True}]
+preprocess_combinations = [{"scaler": None, "pca": None}]
+
+# ── 2. Base param dicts (non-varied keys stay fixed) ─────────────────────────
+
+BASE_KMEANS = {
+    "init": "k-means++", "n_init": "auto", "max_iter": 300,
+    "tol": 1e-4, "verbose": 0, "random_state": 42,
+    "copy_x": True, "algorithm": "lloyd", "pipeline_id": 0
+}
+BASE_KNN = {
+    "radius": 1.0, "algorithm": "auto", "leaf_size": 30,
+    "p": 2, "metric_params": None, "n_jobs": None,
+}
+BASE_DBSCAN = {
+    "metric": "euclidean", "metric_params": None,
+    "algorithm": "auto", "leaf_size": 30, "p": None, "n_jobs": None,
+}
+BASE_AGGLO = {
+    "metric": "euclidean", "compute_full_tree": "auto", "connectivity": None,
+}
+
+result_file = "Outputs/"
+BASE_THRESHOLD = {"threshold_distance": 0.5}
+
+def make_name(prefix, varied, graph, clustering = None) :
+    parts = []
+    if clustering is not None:
+        for k, v in clustering.items():
+            short_key = k.replace("n_clusters", "clusters_") \
+                         .replace("eps", "eps_") \
+                         .replace("min_samples", "ms")\
+                         .replace("random_state", "seed")
+            parts.append(f"{short_key}{v}")
+    for k, v in graph.items():
+        short_key = k.replace("Directed", "Directed_")  \
+                     .replace("Weighted", "Weighted_")
+        parts.append(f"{short_key}{v}")
+    for k, v in varied.items():
+        short_key = k.replace("n_clusters", "clusters_")  \
+                     .replace("n_neighbors", "neighbors_")  \
+                     .replace("distance_threshold", "dt_") \
+                     .replace("min_samples", "ms_") \
+                     .replace("init", "init_")
+        parts.append(f"{short_key}{v}")
+
+    return f"{prefix}_{'_'.join(parts)}"
+
+# ── 4. Grid helpers ───────────────────────────────────────────────────────────
+
+def grid_combinations(grid: dict):
+
+    keys = list(grid.keys())
+    for values in itertools.product(*grid.values()):
+        yield dict(zip(keys, values))
+
+def merge(base: dict, overrides: dict) -> dict:
+    p = deepcopy(base)
+    p.update(overrides)
+    return p
+
+def make_graphs(c):
+    for graph_c in graph_combinations:
+     graph_params= {"Directed": graph_c["Directed"], "Weighted": graph_c["Weighted"]}
+
+     for pre in preprocess_combinations:
+        preprocess = {"scaler": pre["scaler"], "pca": pre["pca"]}
+        pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+        # ── knn_Graph ────────────────────────────────────────────────────────
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
+            print(f"[knn_Graph]   {name}")
+            build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+
+        # ── mutual_knn ───────────────────────────────────────────────────────
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
+            print(f"[mutual_knn]  {name}")
+            build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
+        # ── threshold_graph ───────────────────────────────────────────────────────
+        for threshold_combo in grid_combinations(threshold_grid):
+            threshold_params = merge(BASE_THRESHOLD, threshold_combo)
+            name = make_name(f"threshold_{pre_tag}", threshold_combo, graph_params)
+            build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
+        # ── kmeans clustering ───────────────────────────────────────────────────────
+        make_kmeans_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
+        make_kmeans_mutual_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
+        make_kmeans_threshold_graph_for_all_params(c, preprocess, graph_params, False, True)
+        # ── dbscan clustering ───────────────────────────────────────────────────────
+        make_dbscan_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
+        make_dbscan_mutual_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
+        make_dbscan_threshold_graph_for_all_params(c, preprocess, graph_params, False, True)
+
+
+def make_kmeans_knn_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
+    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+
+    for kmeans_combo in grid_combinations(kmeans_grid):
+        kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+        clustering_results = cl.perform_clustering(data=corpus, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                   agglo_params={}, dbscan_params={}, preprocess=preprocess)
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+
+            name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
+            build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, saving_cluster_graphs, "kmeans", saving_total_graph)
+
+def make_kmeans_mutual_knn_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
+    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+    for kmeans_combo in grid_combinations(kmeans_grid):
+        kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+        clustering_results = cl.perform_clustering(data=corpus, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                   agglo_params={}, dbscan_params={}, preprocess=preprocess)
+        for knn_combo in grid_combinations(knn_grid):
+            knn_params = merge(BASE_KNN, knn_combo)
+            name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
+            build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, saving_cluster_graphs,
+                                              "kmeans", saving_total_graph)
+
+def make_kmeans_threshold_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
+    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+    for kmeans_combo in grid_combinations(kmeans_grid):
+        kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+        clustering_results = cl.perform_clustering(data=corpus, algorithm="kmeans", kmeans_params=kmeans_params,
+                                                   agglo_params={}, dbscan_params={}, preprocess=preprocess)
+        for threshold_combo in grid_combinations(threshold_grid):
+            threshold_params = merge(BASE_THRESHOLD, threshold_combo)
+            name = make_name(f"threshold_kmeans_{pre_tag}", threshold_combo, graph_params, kmeans_combo)
+            build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name,
+                                             saving_cluster_graphs, "kmeans", saving_total_graph)
+
+
+def make_dbscan_knn_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
+    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+    for dbscan_combo in grid_combinations(dbscan_grid):
+        dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
+        name = make_name(f"dbscan_{pre_tag}", dbscan_combo, graph_params)
+        clustering_results = cl.perform_clustering(data=corpus, algorithm="dbscan", kmeans_params={}, agglo_params={},
+                                                  dbscan_params=dbscan_params, preprocess=preprocess)
+        for knn_combo in grid_combinations(knn_grid):
+             knn_params = merge(BASE_KNN, knn_combo)
+             name = make_name(f"knn_dbscan_{pre_tag}", dbscan_combo, graph_params, dbscan_combo)
+             build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,saving_cluster_graphs,
+                                               "dbscan", saving_total_graph)
+def make_dbscan_mutual_knn_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
+    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+    for dbscan_combo in grid_combinations(dbscan_grid):
+        dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
+        name = make_name(f"dbscan_{pre_tag}", dbscan_combo, graph_params)
+        clustering_results = cl.perform_clustering(data=corpus, algorithm="dbscan", kmeans_params={}, agglo_params={},
+                                                  dbscan_params=dbscan_params, preprocess=preprocess)
+        for knn_combo in grid_combinations(knn_grid):
+             knn_params = merge(BASE_KNN, knn_combo)
+             name = make_name(f"knn_dbscan_{pre_tag}", dbscan_combo, graph_params, dbscan_combo)
+             build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,saving_cluster_graphs,
+                                               "dbscan", saving_total_graph)
+
+def make_dbscan_threshold_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
+    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
+    for dbscan_combo in grid_combinations(dbscan_grid):
+         dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
+         clustering_results = cl.perform_clustering(data=corpus, algorithm="dbscan", kmeans_params={}, agglo_params={},
+                                               dbscan_params=dbscan_params, preprocess=preprocess)
+         for threshold_combo in grid_combinations(threshold_grid):
+            threshold_params = merge(BASE_THRESHOLD, threshold_combo)
+            name = make_name(f"threshold_dbscan{pre_tag}", threshold_combo, graph_params, dbscan_combo)
+            build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, saving_cluster_graphs,
+                                             "dbscan", saving_total_graph)
 

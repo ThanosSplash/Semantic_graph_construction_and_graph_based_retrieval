@@ -21,73 +21,10 @@ import pandas as pd
 knn_metrics = ['cosine', 'euclidean', 'manhattan', 'minkowski']
 k_means_algorithms = ['k-means++', 'random']
 rerankers = ['BM25', 'graph_aware', 'cross_encoder']
-kmeans_grid = {
-    "n_clusters": [5, 10, 20],
-    "init":       ["k-means++"],
-}
-
-knn_grid = {
-    "n_neighbors": [5, 10, 20],
-    "metric":      ["cosine"]
-}
-threshold_grid = {
-    "threshold_distance": [0.8, 0.6, 0.4]
-
-}
-
-dbscan_grid = {
-    "eps":         [0.5],
-    "min_samples": [10],
-}
-
-agglo_grid = {
-    "linkage":            ["ward", "complete", "average"],
-    "distance_threshold": [None],
-    "n_clusters":         [3, 4],
-}
-graph_grid = {
-     "Directed": False,
-     "Weighted": True
-}
-#preprocess_combinations = [
-#    {"scaler": None, "pca": None},
-#    {"scaler": MinMaxScaler(),   "pca": None},
-#    {"scaler": StandardScaler(), "pca": None},
-#    {"scaler": None, "pca":  PCA()},
-#    {"scaler": StandardScaler(), "pca": PCA()},
-#    {"scaler": MinMaxScaler(),   "pca": PCA()},
-#]
-#graph_combinations = [
-#    {"Directed": False, "Weighted": True},
-#    {"Directed": True, "Weighted": True},
-#    {"Directed": True, "Weighted": False},
-#    {"Directed": False, "Weighted": False},
-
-#]
-graph_combinations = [{"Directed": False, "Weighted": True}]
-preprocess_combinations = [{"scaler": None, "pca": None}]
-
-# ── 2. Base param dicts (non-varied keys stay fixed) ─────────────────────────
-
-BASE_KMEANS = {
-    "init": "k-means++", "n_init": "auto", "max_iter": 300,
-    "tol": 1e-4, "verbose": 0, "random_state": None,
-    "copy_x": True, "algorithm": "lloyd", "pipeline_id": 0
-}
-BASE_KNN = {
-    "radius": 1.0, "algorithm": "auto", "leaf_size": 30,
-    "p": 2, "metric_params": None, "n_jobs": None,
-}
-BASE_DBSCAN = {
-    "metric": "euclidean", "metric_params": None,
-    "algorithm": "auto", "leaf_size": 30, "p": None, "n_jobs": None,
-}
-BASE_AGGLO = {
-    "metric": "euclidean", "compute_full_tree": "auto", "connectivity": None,
-}
 
 result_file = "Outputs/"
-BASE_THRESHOLD = {"threshold_distance": 0.5}
+FILE_PPR = "2026-09-02_deep sensitivity experiment_38ffe2c1"
+FILE_K_STEPH = "2026-09-05_deep sensitivity experiment k steph_6596cad8"
 
 
 def make_name(prefix, varied, graph, clustering = None) :
@@ -96,7 +33,8 @@ def make_name(prefix, varied, graph, clustering = None) :
         for k, v in clustering.items():
             short_key = k.replace("n_clusters", "clusters_") \
                          .replace("eps", "eps_") \
-                         .replace("min_samples", "ms")
+                         .replace("min_samples", "ms")\
+                         .replace("random_state", "seed")
             parts.append(f"{short_key}{v}")
     for k, v in graph.items():
         short_key = k.replace("Directed", "Directed_")  \
@@ -111,98 +49,6 @@ def make_name(prefix, varied, graph, clustering = None) :
         parts.append(f"{short_key}{v}")
 
     return f"{prefix}_{'_'.join(parts)}"
-
-# ── 4. Grid helpers ───────────────────────────────────────────────────────────
-
-def grid_combinations(grid: dict):
-
-    keys = list(grid.keys())
-    for values in itertools.product(*grid.values()):
-        yield dict(zip(keys, values))
-
-def merge(base: dict, overrides: dict) -> dict:
-    p = deepcopy(base)
-    p.update(overrides)
-    return p
-
-
-def make_graphs(c):
-    results = []   # collect (name, function, params) for logging
-    count = 0
-    for graph_c in graph_combinations:
-     graph_params= {"Directed": graph_c["Directed"], "Weighted": graph_c["Weighted"]}
-
-     for pre in preprocess_combinations:
-        preprocess = {"scaler": pre["scaler"], "pca": pre["pca"]}
-        pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
-
-
-
-        # ── knn_Graph ────────────────────────────────────────────────────────
-        for knn_combo in grid_combinations(knn_grid):
-            knn_params = merge(BASE_KNN, knn_combo)
-            name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
-            print(f"[knn_Graph]   {name}")
-            gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            count+=1
-
-        # ── mutual_knn ───────────────────────────────────────────────────────
-        for knn_combo in grid_combinations(knn_grid):
-            knn_params = merge(BASE_KNN, knn_combo)
-            name = make_name(f"mutual_{pre_tag}", knn_combo, graph_params)
-            print(f"[mutual_knn]  {name}")
-            gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
-            count+=1
-        # ── threshold_graph ───────────────────────────────────────────────────────
-        for threshold_combo in grid_combinations(threshold_grid):
-            threshold_params = merge(BASE_THRESHOLD, threshold_combo)
-            name = make_name(f"threshold_{pre_tag}", threshold_combo, graph_params)
-            gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
-            results.append(("threshold", name, threshold_combo, preprocess))
-        # ── kmeans clustering ───────────────────────────────────────────────────────
-        for kmeans_combo in grid_combinations(kmeans_grid):
-            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
-            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
-                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            for knn_combo in grid_combinations(knn_grid):
-                knn_params = merge(BASE_KNN, knn_combo)
-
-                name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
-                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,False, "kmeans")
-                count += 2
-        for kmeans_combo in grid_combinations(kmeans_grid):
-            kmeans_params = merge(BASE_KMEANS, kmeans_combo)
-            clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params,
-                                                       agglo_params={}, dbscan_params={}, preprocess=preprocess)
-            for threshold_combo in grid_combinations(threshold_grid):
-                threshold_params = merge(BASE_THRESHOLD, threshold_combo)
-                name = make_name(f"threshold_kmeans_{pre_tag}", threshold_combo, graph_params, kmeans_combo)
-                gc.build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, False, "kmeans")
-
-        #for dbscan_combo in grid_combinations(dbscan_grid):
-            #dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
-            #name = make_name(f"dbscan_{pre_tag}", dbscan_combo, graph_params)
-            #clustering_results = cl.perform_clustering(data=c, algorithm="dbscan", kmeans_params={}, agglo_params={},
-             #                                          dbscan_params=dbscan_params, preprocess=preprocess)
-            #for knn_combo in grid_combinations(knn_grid):
-                #knn_params = merge(BASE_KNN, knn_combo)
-                #name = make_name(f"knn_dbscan_{pre_tag}", dbscan_combo, graph_params, dbscan_combo)
-                #gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False)
-                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                 #                                    False)
-                #count += 2
-        #for dbscan_combo in grid_combinations(dbscan_grid):
-            #dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
-            #clustering_results = cl.perform_clustering(data=c, algorithm="dbscan", kmeans_params={}, agglo_params={},
-            #                                          dbscan_params=dbscan_params, preprocess=preprocess)
-            #for threshold_combo in grid_combinations(threshold_grid):
-                #threshold_params = merge(BASE_THRESHOLD, threshold_combo)
-                #name = make_name(f"threshold_dbscan{pre_tag}", threshold_combo, graph_params, dbscan_combo)
-                #gc.build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, False)
-
-    print(f"\nDone — {count} graphs generated.")
-    return results
 
 
 
@@ -267,102 +113,80 @@ def get_kmeans_input():
     kmeans_combo = {"n_clusters": N_CLUSTERS, "init": INIT}
     return kmeans_combo
 
+def make_dev_test_splits():
+    """Function that makes the dev and test splits"""
+    # Make dev split
+    query, _, _ = dt.load_texts()
+    make_split(query, 0.02, "dev")
+    # Make test split
+    query, _ = dt.load_texts_tests()
+    make_split(query, 0.7, "test")
 
-def make_dev_query_split():
-    q, a, c = dt.load_texts()
-    q_emb, _, _ = dt.load_data()
+def make_split(query, split_percentage, split_type):
+    """Making splits for a given set of queries. The splits are based on lengths and the three groups are
+       small, medium, large. After labeling all the query with the labels small, medium, long the splits are made
+       by taking ids randomly.
+    """
     vectorizer = TfidfVectorizer()
     analyzer = vectorizer.build_analyzer()
     query_labels = {}
-    lengths = [len(analyzer(text)) for text in q.values()]
+    lengths = [len(analyzer(text)) for text in query.values()]
     p33, p66 = np.percentile(lengths, [33, 66])
-    for qid, text in q.items():
-        n = len(analyzer(text))
-        query = q_emb[qid]
-        query_correct_results = query[1]
 
-        if n <= p33:
+    for qid, text in query.items():
+        # Labeling the queries to small, medium , long
+        query_length = len(analyzer(text))
+
+        if query_length <= p33:
             label = "small"
-        elif n <= p66:
+        elif query_length <= p66:
             label = "medium"
         else:
             label = "long"
 
         query_labels[qid] = label
 
-    print(len(query_labels.keys()))
-    total_sample = int(len(query_labels) * 0.04)
-    each_label_size = total_sample // 3
-    print(each_label_size)
-    small_queries = []
-    medium_queries = []
-    long_queries = []
+    # Determining each sample size
+    total_sample = int(len(query_labels) * split_percentage)
+    each_sample_size = total_sample // 3
+    # Randomly taking the ids for sample
     rng = np.random.default_rng(42)
-
     small_pool = [qid for qid, l in query_labels.items() if l == "small"]
     medium_pool = [qid for qid, l in query_labels.items() if l == "medium"]
     long_pool = [qid for qid, l in query_labels.items() if l == "long"]
     small_queries = rng.choice(
         small_pool,
-        size=min(each_label_size, len(small_pool)),
+        size=min(each_sample_size, len(small_pool)),
         replace=False
     ).tolist()
 
     medium_queries = rng.choice(
         medium_pool,
-        size=min(each_label_size, len(medium_pool)),
+        size=min(each_sample_size, len(medium_pool)),
         replace=False
     ).tolist()
 
     long_queries = rng.choice(
         long_pool,
-        size=min(each_label_size, len(long_pool)),
+        size=min(each_sample_size, len(long_pool)),
         replace=False
     ).tolist()
 
-    print(small_queries)
-    #print(len(medium_queries))
-    #print(len(long_queries))
-    #dt.sanity_check(small_queries + medium_queries + long_queries)
-    dt.save_split(small_queries, medium_queries, long_queries, f"Data/splits", "dev")
+    # Saving the samples
+    dt.save_split(small_queries, medium_queries, long_queries, f"Data/splits", split_type)
 
-def make_test_split():
-    q, a = dt.load_texts_tests()
-    q_emb, _ = dt.load_data_tests()
-    vectorizer = TfidfVectorizer()
-    analyzer = vectorizer.build_analyzer()
-    query_labels = {}
-    lengths = [len(analyzer(text)) for text in q.values()]
-    p33, p66 = np.percentile(lengths, [33, 66])
-    for qid, text in q.items():
-        n = len(analyzer(text))
-        query = q_emb[qid]
-        if n <= p33:
-            label = "small"
-        elif n <= p66:
-            label = "medium"
-        else:
-            label = "long"
-
-        query_labels[qid] = label
-
-    print(len(query_labels.keys()))
-    small_queries = []
-    medium_queries = []
-    long_queries = []
-    rng = np.random.default_rng(42)
-
-    small_pool = [qid for qid, l in query_labels.items() if l == "small"]
-    medium_pool = [qid for qid, l in query_labels.items() if l == "medium"]
-    long_pool = [qid for qid, l in query_labels.items() if l == "long"]
-    #print(small_pool)
-    #print(medium_pool)
-    #print(long_pool)
-    #dt.sanity_check(small_pool + medium_pool + long_pool)
-    dt.save_split(small_pool, medium_pool, long_pool, f"Data/splits", "test")
 
 
 if __name__ == "__main__":
+    """Νεα πειραμτα στην επιλογη run experiments, k steph exhaustive, dbscan selection study, ablation study preproces
+       Νεοι πινακες στις συναρτησεις make_random_state_table και αλλαγες στους αλλους πινακες για να παρουσιαζουν καλυτερα
+       τα αποτελεσματα. Επισης για alpha, init και hop εχουν γινει και νεοι πινακες απο την save_param_sensitivity_stats_table
+       που δειχνουν μαζεμενα πως σε καθε γραφο/οικογενεια γραφων η αλλαγη των alpha αλλαζουν τα metrics. Επισης make_spearmanr_table
+       και make_paired_bootstrap_table παλι στην tables.py η make_paired_bootstrap_table για τα queries και η make_spearmanr_table γενικα 
+       για τους γραφους και με βαση αυτα κανω καποια graphs με την συναρτηση make_spearmanr_plots και για την bootstrap forest_plot.
+    """
+
+
 
     MODE = str(input("Choose Mode, Make graphs, Make a test graph, Run experiments, Make embeddings Graph performance "
                      "make query samples: "))
@@ -370,20 +194,48 @@ if __name__ == "__main__":
 
     #MODE = ""
     if MODE.lower() == "make graphs":
+        METHOD = input("All types, kmeans knn, mutual kmeans knn, threshold kmeans knn: ").strip()
         q, a, c = dt.load_data()
-        make_graphs(c)
+        preprocess = {"scaler": None, "pca": None}
+        graph_params = {"Directed": False, "Weighted": True}
+        if METHOD.lower() == "all types":
+            gc.make_graphs(c)
+        elif METHOD.lower() == "kmeans knn":
+            gc.make_kmeans_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
+        elif METHOD.lower() == "mutual kmeans knn":
+            gc.make_kmeans_mutual_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
+        elif METHOD.lower() == "threshold kmeans knn":
+            gc.make_kmeans_threshold_graph_for_all_params(c, preprocess, graph_params, False, True)
     elif MODE.lower() == "make embeddings":
         ex.prepare_dataset()
     elif MODE.lower() == "run experiments":
-        METHOD = input("Examples: ").strip()
-        if METHOD.lower() == "examples":
-            ex.run_an_baseline()
-            ex.run_an_example_retrieval_ppr()
-            ex.run_an_example_retrieval_k_steph()
+        METHOD = input("baseline, prr calibration study, ppr seed selection study, k steph exhaustive,"
+                       " ppr exhaustive, ablation study preprocess,random state selection study, dbscan selection study: ").strip()
+        if METHOD.lower() == "baseline":
+            ex.run_baseline("dev")
+            ex.run_baseline("test")
+        elif METHOD.lower() == "prr calibration study":
             ex.ppr_score_calibration_study()
-        ex.run_retrieval_ppr_deep_sensitivity_experiment()
+        elif METHOD.lower() == "ppr seed selection study":
+            ex.ppr_seed_selection_study()
+        elif METHOD.lower() == "dbscan selection study":
+            ex.dbscan_param_selection_study()
+        elif METHOD.lower() == "ppr exhaustive":
+            ex.run_retrieval_ppr_deep_sensitivity_experiment()
+        elif METHOD.lower() == "k steph exhaustive":
+            if FILE_PPR == "":
+                raise ValueError(f"Wrong ppr experiment {FILE_PPR}")
+            top_3 = dt.get_top_3_best_performing_graphs("PPR", "all_samples", FILE_PPR,
+                                                        "dev")
+            files = [entry["graph"] for entry in top_3]
+            ex.run_retrieval_k_steph("graph_aware", files)
+        elif METHOD.lower() == "random state selection study":
+            ex.k_means_random_state_study()
+        elif METHOD.lower() == "ablation study preprocess":
+            ex.ablation_study("preprocess")
+
     elif MODE.lower() == "make query samples":
-        make_dev_query_split()
+        make_dev_test_splits()
     elif MODE.lower() == "graph performance":
         GRAPH_NAME = input("Graph name: ").strip()
         dt.graph_perf(GRAPH_NAME)
@@ -394,12 +246,12 @@ if __name__ == "__main__":
         METHOD = input("Choose method, Mutual knn, Knn, Clustering, threshold: ").strip()
         if METHOD.lower() == "mutual knn":
             knn_combo = get_knn_input()
-            knn_params = merge(BASE_KNN, knn_combo)
+            knn_params = gc.merge(gc.BASE_KNN, knn_combo)
             name = make_name(f"mutual_knn_{pre_tag}", knn_combo, graph_params)
             gc.build_mutual_knn_graph(c, knn_params, preprocess, name, graph_params, True)
         elif METHOD.lower() == "knn":
             knn_combo = get_knn_input()
-            knn_params = merge(BASE_KNN, knn_combo)
+            knn_params = gc.merge(gc.BASE_KNN, knn_combo)
             name = make_name(f"knn_{pre_tag}", knn_combo, graph_params)
             print(name)
             gc.build_knn_graph(c, knn_params, preprocess, name, graph_params, True)
@@ -412,27 +264,28 @@ if __name__ == "__main__":
             GRAPH_ALGO = input("Choose algorithm, Kmeans/Dbscan: ").strip()
             if GRAPH_ALGO.lower() == "kmeans":
                 kmeans_combo = get_kmeans_input()
-                kmeans_params = merge(BASE_KMEANS, kmeans_combo)
+                kmeans_params = gc.merge(gc.BASE_KMEANS, kmeans_combo)
 
                 knn_combo = get_knn_input()
-                knn_params = merge(BASE_KNN, knn_combo)
+                knn_params = gc.merge(gc.BASE_KNN, knn_combo)
                 name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
 
                 clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params, agglo_params={}, dbscan_params={},  preprocess= preprocess)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
-                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans")
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans", True)
+                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans",True)
+
             elif GRAPH_ALGO.lower() == "dbscan":
                 dbscan_combo = get_dbscan_input()
-                dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
+                dbscan_params = gc.merge(gc.BASE_DBSCAN, dbscan_combo)
                 knn_combo = get_knn_input()
-                knn_params = merge(BASE_KNN, knn_combo)
+                knn_params = gc.merge(gc.BASE_KNN, knn_combo)
 
                 pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
                 name = make_name(f"knn_dbscan_{pre_tag}", knn_combo, graph_params, dbscan_combo)
                 clustering_results = cl.perform_clustering(data=c, algorithm="dbscan", kmeans_params={}, agglo_params={}, dbscan_params=dbscan_params,  preprocess= preprocess)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "dbscan")
-                gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                                                  False, "dbscan")
+                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "dbscan", True)
+                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
+                #                                  False, "dbscan")
             else:
                 raise ValueError(f"Wrong graph construction method: {GRAPH_ALGO}")
     else:

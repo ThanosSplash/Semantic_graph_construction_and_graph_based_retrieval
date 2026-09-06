@@ -1,6 +1,5 @@
-from sklearn.metrics import ndcg_score
 import numpy as np
-import math as m
+
 def dcg_score(y_true,  gains = "linear"):
     """ Function that calculates dcg and idcg score
         y_true: The prediction in binary form
@@ -62,7 +61,7 @@ def RR_score(predictions, correct_results, k):
         if prediction in correct_set:
             return 1/(indx + 1), indx
 
-    return 0, 9999
+    return 0, k+1
 
 
 def MRR_score(rr_scores):
@@ -91,16 +90,31 @@ def avg_precision(predictions, correct_results, k):
     return sums/denominator
 
 
-#def nDCGk_score(predictions, correct_results, k):
-    #if len(predictions) == 0:
-        #return 0.0
-    #correct_set = set(correct_results)
+def paired_bootstrap_ci(baseline, graph, n_boot=5000, seed=42, alpha=0.05):
+    """Function that calculates paired bootstrap for baseline and graph retrieval
+       the pairs consists of queries
+    """
+    rng = np.random.default_rng(seed)
 
+    baseline = np.asarray(baseline)
+    graph = np.asarray(graph)
+    if len(baseline) != len(graph):
+        raise ValueError("Unmatched baseline and graph lists")
+    # Calculate differences and mean difference
+    differences = graph - baseline
+    observed_diff = differences.mean()
 
-    #relevance = np.array([[1 if p in correct_set else 0 for p in predictions]])
+    means = []
+    for _ in range(n_boot):
+        # Resampling data in the population and calculating mean
+        sample = rng.choice(differences, size=len(differences), replace=True)
+        means.append(sample.mean())
+    # Calculate lower , upper
+    lower, upper = np.percentile(means, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    significant = not (lower <= 0 <= upper)
 
-
-    #mock_scores = np.array([[len(predictions) - i for i in range(len(predictions))]])
-
-    #return ndcg_score(relevance, mock_scores, k=k)
-
+    return {
+        "observed_diff": observed_diff,
+        "ci": (lower, upper),
+        "significant": significant,
+    }
