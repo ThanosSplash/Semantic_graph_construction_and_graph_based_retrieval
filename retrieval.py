@@ -240,10 +240,12 @@ def bm25_scores_for_query(query_id, query_type, retrieved_ids=None):
     return scores, query_correct_results
 def fusion_scores_for_query(query_id, query_type, retrieved_ids=None, alpha = 0.5):
     cosine_scores, query_correct_results = sim_scores_for_query(query_id, query_type, retrieved_ids)
+    cosine_norm = normalize_dict(cosine_scores, "Min_Max")
     bm25_scores, _ = bm25_scores_for_query(query_id, query_type, retrieved_ids)
+    bm25_norm = normalize_dict(bm25_scores, "Min_Max")
     fusion_scores = {}
-    for id in cosine_scores.keys():
-        fusion_scores[id] = cosine_scores[id]*alpha + bm25_scores[id]*(1-alpha)
+    for id in cosine_norm.keys():
+        fusion_scores[id] = cosine_norm[id]*alpha + bm25_norm[id]*(1-alpha)
     return fusion_scores, query_correct_results
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 """-------------------------------------------------------------Rerankers-------------------------------------------------------------"""
@@ -268,7 +270,7 @@ def rerank_graph_aware(graph, query_id, retrieved_ids, init_nodes, sims, alpha, 
     final_scores.sort(key=lambda x: -x[1])
     return final_scores
 
-def rerank_cross_encoder(query_id, query_type, retrieved_ids):
+def rerank_cross_encoder(query_id, query_type, retrieved_ids, norm_pipeline):
     """Given the retrieved ids using the cross encoder function to make a new rankings for them
            query_id: The id of the query
            retrieved_ids: The ids that the retriever method retrieved
@@ -285,10 +287,9 @@ def rerank_cross_encoder(query_id, query_type, retrieved_ids):
         cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
     # Checking if cude exists
     # Making pairs for the cross encoder model
-    #if len(retrieved_ids) > 50:
     if len(retrieved_ids) > 50:
         #filtered = bm25_scores_for_query(query_id, retrieved_ids)[:80]
-        filtered = rerank_bm25(query_id, query_type, retrieved_ids)[:20]
+        filtered = rerank_bm25(query_id, query_type, retrieved_ids, 0.5, norm_pipeline)[:20]
         ids = [node_id for node_id, _ in filtered]
     else:
         ids = retrieved_ids
@@ -306,20 +307,21 @@ def rerank_cross_encoder(query_id, query_type, retrieved_ids):
     return final_scores
 
 
-def rerank_bm25(query_id, query_type, retrieved_ids, alpha=0.5):
+def rerank_bm25(query_id, query_type, retrieved_ids, alpha, norm_pipeline):
     """Given the retrieved ids using the BM25 function to make a new rankings for them
     """
     # Calculate and Normalise the scores for cosine sim and bm25
     sim_dict, query_correct_results = sim_scores_for_query(query_id, query_type, retrieved_ids)
-    sim_scores = np.array([sim_dict[id] for id in retrieved_ids])
     # Normalise the scores
-    bm25_norm, _ = bm25_scores_for_query(query_id, query_type, retrieved_ids)
-    sim_norm = normalize(sim_scores)
+    bm25_dict, _ = bm25_scores_for_query(query_id, query_type, retrieved_ids)
 
-    final_scores = [
-        (node_id, alpha * sim_norm[i] + (1 - alpha) * bm25_norm[node_id])
-        for i, node_id in enumerate(retrieved_ids)
-    ]
+    if norm_pipeline != "":
+        sim_norm = normalize_dict(sim_dict, norm_pipeline)
+        ppr_norm = normalize_dict(bm25_dict, norm_pipeline)
+        final_scores = fusion(retrieved_ids, sim_norm, ppr_norm, alpha)
+    else:
+        # Calculating total scores for each node
+        final_scores = fusion(retrieved_ids, sim_dict, bm25_dict, alpha)
     final_scores.sort(key=lambda x: -x[1])
     return final_scores
 
@@ -411,9 +413,9 @@ def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, s
         final_scores = rerank_graph_aware(graph, query_id, neighbors, init_nodes, sims, alpha, adjacency, node_to_idx,
                                           query_type, global_node_list, norm_pipeline)
     elif reranker_type == "cross_encoder":
-        final_scores = rerank_cross_encoder(query_id, query_type, neighbors)
+        final_scores = rerank_cross_encoder(query_id, query_type, neighbors, norm_pipeline)
     elif reranker_type == "BM25":
-        final_scores = rerank_bm25(query_id, query_type, neighbors, alpha)
+        final_scores = rerank_bm25(query_id, query_type, neighbors, alpha, norm_pipeline)
     # Get the topk and making two lists for the ids and the  score
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]
@@ -470,9 +472,9 @@ def shortest_path(graph, query_id, init_nodes, k, alpha, sims, reranker_type, qu
     if reranker_type == "graph_aware":
         final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, init_nodes, sims, alpha, query_type, norm_pipeline)
     elif reranker_type == "cross_encoder":
-        final_scores = rerank_cross_encoder(query_id, query_type, nodes_in_path)
+        final_scores = rerank_cross_encoder(query_id, query_type, nodes_in_path, norm_pipeline)
     elif reranker_type == "BM25":
-        final_scores = rerank_bm25(query_id, query_type, nodes_in_path, alpha)
+        final_scores = rerank_bm25(query_id, query_type, nodes_in_path, alpha, norm_pipeline)
     # Choosing the topk and return the ids and its scores
     top_k = final_scores[:k]
     pred_ids = [node_id for node_id, _ in top_k]

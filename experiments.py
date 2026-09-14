@@ -34,7 +34,7 @@ def prepare_all():
 
 
 def prepare_dataset():
-   # Loading the dataset and calculating the embeddings and then save them
+    # Function that loads the dataset and calculating the embeddings and then save them
 
     # Loading data from the dataset bioasq
     bioasq, bioasq_corpus, bioasq_test = dt.read_dataset_bioasq("Datasets/rag-mini-bioasq/")
@@ -42,7 +42,6 @@ def prepare_dataset():
     # Converting bioasq, bioasq_corpus dataframes to three dictionaries
     questions_emb, answers_emb, answers_text, questions_text = emb.make_embeddings(bioasq)
     questions_emb_test, answers_emb_test, answers_text_test, questions_text_test = emb.make_embeddings(bioasq_test)
-
     corpus_emb, corpus_text = emb.make_embeddings_corpus(bioasq_corpus)
 
     # Saving the dictionaries questions, answers, corpus in a binary file
@@ -370,7 +369,115 @@ def run_retrieval_ppr_deep_sensitivity_experiment():
         for sample_type in sample_types:
             pt.make_plot_performance_of_different_graph_types(metric, "PPR", sample_type, "dev", True,
                                                               run_id)
+def ablation_study(param_to_study):
+    small, medium, long = dt.load_splits_dev()
+    files = dt.get_files_for_param("Outputs/graphs", param_to_study)
 
+    # Parameter grids
+    k_retrive = [5, 10, 20]
+    alphas = [0, 0.2, 0.5, 0.8, 1.0]
+    inits = [2, 5, 10, 50]
+    norm_pipeline = dt.get_freeze_norm()
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    query_type = "dev"
+    seed_selection = dt.get_freeze_seed()
+    EXPERIMENT_NAME = f"deep sensitivity experiment for different params in the contruction of the graph {param_to_study}"
+    NOTES = "testing ppr for a lot of different parameters for a small chunk of data for debug"
+    SPLITS_USED = "dev split"
+    parameters = {'alphas': alphas, 'k': k_retrive, 'inits': inits, "norm_pipeline": norm_pipeline
+        , "query_type": query_type, "seed_selection": seed_selection, "param": param_to_study}
+    run_id = dt.make_run_id(EXPERIMENT_NAME)
+    save_dir = dt.setup_run_dir(run_id, NOTES, SPLITS_USED, parameters)
+    dt.sanity_check(small + medium + long, save_dir, query_type)
+    pbar = tqdm(range(len(files)))
+    for i in pbar:
+        file = files[i]
+        pbar.set_description(f"Processing {files[i]}")
+        graph = dt.load_graph(file)
+        # print(f"\n=== File: {file} ===")
+
+        # --- ppr_search: sweep rerankers × alphas × inits × sample sets ---
+        for k in k_retrive:
+            for alpha in alphas:
+                for init in inits:
+                    eval_scores = None
+                    params = None
+                    total_latency = 0.0
+                    for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                        scores, p, latency = personalised_pagerank_search(dataset, graph, k, save_dir, init,
+                                                                          name, alpha, file, run_id, query_type,
+                                                                          norm_pipeline,
+                                                                          seed_selection)
+                        total_latency += latency
+                        if eval_scores is None:
+                            eval_scores, params = scores, p
+                        else:
+                            for m in metrics:
+                                eval_scores[m] += scores[m]
+                    params["sample_type"] = "all_samples"
+                    rearrange_results_and_save_for_all_samples("PPR", eval_scores, save_dir, params,
+                                                               query_type, total_latency)
+
+    return
+
+def run_retrieval_ppr_deep_sensitivity_experiment_for_agglo():
+    small, medium, long = dt.load_splits_dev()
+
+    files = dt.get_agglo_files("Outputs/graphs")
+
+    # Parameter grids
+    k_retrive = [5, 10, 20]
+    alphas = [0, 0.2, 0.5, 0.8, 1.0]
+    inits = [2, 5, 10, 50]
+    norm_pipeline = dt.get_freeze_norm()
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    query_type = "dev"
+    seed_selection = dt.get_freeze_seed()
+    EXPERIMENT_NAME = "deep sensitivity experiment for agglo kmeans"
+    NOTES = "testing ppr for a lot of different parameters for a small chunk of data for debug"
+    SPLITS_USED = "dev split"
+    parameters = {'alphas': alphas, 'k': k_retrive, 'inits': inits, "norm_pipeline": norm_pipeline
+        , "query_type": query_type, "seed_selection": seed_selection}
+    run_id = dt.make_run_id(EXPERIMENT_NAME)
+    save_dir = dt.setup_run_dir(run_id, NOTES, SPLITS_USED, parameters)
+    dt.sanity_check(small + medium + long, save_dir, query_type)
+    pbar = tqdm(range(len(files)))
+    for i in pbar:
+        file = files[i]
+        pbar.set_description(f"Processing {files[i]}")
+        graph = dt.load_graph(file)
+        # print(f"\n=== File: {file} ===")
+
+        # --- ppr_search: sweep rerankers × alphas × inits × sample sets ---
+        for k in k_retrive:
+            for alpha in alphas:
+                for init in inits:
+                    eval_scores = None
+                    params = None
+                    total_latency = 0.0
+                    for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                        scores, p, latency = personalised_pagerank_search(dataset, graph, k, save_dir, init,
+                                                                          name, alpha, file, run_id, query_type,
+                                                                          norm_pipeline,
+                                                                          seed_selection)
+                        total_latency += latency
+                        if eval_scores is None:
+                            eval_scores, params = scores, p
+                        else:
+                            for m in metrics:
+                                eval_scores[m] += scores[m]
+                    params["sample_type"] = "all_samples"
+                    rearrange_results_and_save_for_all_samples("PPR", eval_scores, save_dir, params,
+                                                               query_type, total_latency)
+    dt.seperate_results(run_id, query_type)
+    tables.make_query_table(run_id, query_type, "all")
+    tables.make_query_table(run_id, query_type, "one hop")
+    tables.make_query_table(run_id, query_type, "multi hop")
+    tables.make_leaderboard_table(run_id)
+    tables.make_alpha_sensitivity_table(run_id)
+    tables.make_init_sensitivity_table(run_id)
+    tables.make_graph_construction_sensitivity_table(run_id)
+    tables.make_paired_bootstrap_table(run_id, "PPR", "all_samples", query_type)
 
 def run_retrieval_k_steph(reranker, files=None):
     small, medium, long = dt.load_splits_dev()
@@ -441,56 +548,11 @@ def run_retrieval_k_steph(reranker, files=None):
             pt.make_plot_performance_of_different_graph_types(metric, "k-steph", sample_type, "dev",
                                                               run_id)
 
-def ablation_study(param_to_study):
-    small, medium, long = dt.load_splits_dev()
-    files = dt.get_files_for_param("Outputs/graphs", param_to_study)
 
-    # Parameter grids
-    k_retrive = [5, 10, 20]
-    alphas = [0, 0.2, 0.5, 0.8, 1.0]
-    inits = [2, 5, 10, 50]
-    norm_pipeline = dt.get_freeze_norm()
-    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
-    query_type = "dev"
-    seed_selection = dt.get_freeze_seed()
-    EXPERIMENT_NAME = f"deep sensitivity experiment for different params in the contruction of the graph {param_to_study}"
-    NOTES = "testing ppr for a lot of different parameters for a small chunk of data for debug"
-    SPLITS_USED = "dev split"
-    parameters = {'alphas': alphas, 'k': k_retrive, 'inits': inits, "norm_pipeline": norm_pipeline
-        , "query_type": query_type, "seed_selection": seed_selection, "param": param_to_study}
-    run_id = dt.make_run_id(EXPERIMENT_NAME)
-    save_dir = dt.setup_run_dir(run_id, NOTES, SPLITS_USED, parameters)
-    dt.sanity_check(small + medium + long, save_dir, query_type)
-    pbar = tqdm(range(len(files)))
-    for i in pbar:
-        file = files[i]
-        pbar.set_description(f"Processing {files[i]}")
-        graph = dt.load_graph(file)
-        # print(f"\n=== File: {file} ===")
 
-        # --- ppr_search: sweep rerankers × alphas × inits × sample sets ---
-        for k in k_retrive:
-            for alpha in alphas:
-                for init in inits:
-                    eval_scores = None
-                    params = None
-                    total_latency = 0.0
-                    for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-                        scores, p, latency = personalised_pagerank_search(dataset, graph, k, save_dir, init,
-                                                                          name, alpha, file, run_id, query_type,
-                                                                          norm_pipeline,
-                                                                          seed_selection)
-                        total_latency += latency
-                        if eval_scores is None:
-                            eval_scores, params = scores, p
-                        else:
-                            for m in metrics:
-                                eval_scores[m] += scores[m]
-                    params["sample_type"] = "all_samples"
-                    rearrange_results_and_save_for_all_samples("PPR", eval_scores, save_dir, params,
-                                                               query_type, total_latency)
 
-    return
+
+
 
 def run_an_example_retrieval_ppr():
     small, medium, long = dt.load_splits_dev()
@@ -673,7 +735,7 @@ def ppr_seed_selection_study():
     norm_pipeline = ["Min_Max"]
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     query_type = "dev"
-    seed_selection = ["cosine", "bm25", "fusion"]
+    seed_selection = ["cosine", "bm25"]
     EXPERIMENT_NAME = "ppr_seed_selection_study"
     NOTES = "Testing ppr seed selection using cosine and bm25"
     SPLITS_USED = "dev split"
@@ -745,15 +807,14 @@ def k_means_random_state_study():
                                                                               name, alpha, file, run_id, query_type, norm_pipeline,
                                                                               seed_selection)
     dt.seperate_results(run_id, query_type)
-    tables.make_random_state_table(run_id, random_states)
+    tables.make_random_state_table(run_id)
 
 
 def dbscan_param_selection_study():
 
-    epsilons = np.linspace(0.45, 0.6, num=30)
-    min_samples = np.arange(2, 10, step=2)
+    epsilons = np.linspace(0.4, 0.55, num=30)
+    min_samples = np.arange(2, 25, step=2)
     combinations = list(itertools.product(epsilons, min_samples))
-    preprocess = {"PCA": None, "Scaler": None}
     _, _, c = dt.load_data()
     scores = []
     all_label_list = []
@@ -774,15 +835,17 @@ def dbscan_param_selection_study():
             all_label_list.append('bad')
             all_num_label.append(num_clusters)
             continue
-        scores.append(silhouette_score(embeddings, labels, sample_size=5000, random_state=42))
+        mask = labels != -1
+        score = score = silhouette_score(embeddings[mask], labels[mask], metric="cosine", random_state=42)
+        scores.append(score)
         all_label_list.append(labels)
         all_num_label.append(len(labels_set))
         print(f"Score {scores[i]} , num of clusters {num_clusters}")
 
-
+    if max(scores) == -10:
+        raise RuntimeError("No valid clustering found for any parameter combination")
     best_indx = np.argmax(scores)
     best_params = combinations[best_indx]
-    best_labels = all_label_list[best_indx]
     best_score = scores[best_indx]
     best_num_labels = all_num_label[best_indx]
     dt.freeze_dbscan_configs(int(best_params[1]), float(best_params[0]), best_score, best_num_labels)

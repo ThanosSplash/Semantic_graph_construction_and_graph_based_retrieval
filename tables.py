@@ -6,6 +6,7 @@ import numpy as np
 import evaluation as ev
 import data_loading as dt
 import plotting as pt
+import pickle
 COL_WIDTHS = {
     "method": 25,
     "density": 25,
@@ -16,6 +17,7 @@ COL_WIDTHS = {
     "map": 25,
     "graph": 120,
     "graph_name": 90,
+    "graph_name_": 70,
     "hops": 25,
     "init": 25,
     "id": 25,
@@ -40,7 +42,24 @@ COL_WIDTHS = {
       "neg": 25 ,
       "same": 25,
       "sum_delta": 30,
-      "sum_abs": 30
+      "sum_abs": 30,
+       "scaler":20,
+       "pca": 20,
+     "dist_metric":20,
+     "Directed": 20,
+     "Weighted": 20,
+     "std_ndcg": 25,
+     "mean_ndcg": 25,
+     "std_recall": 25,
+     "mean_recall": 25,
+     "std_mrr": 25,
+     "mean_mrr": 25,
+     "std_map": 25,
+     "mean_map": 25,
+     "max_ndcg":25,
+     "max_recall": 25,
+     "max_mrr": 25,
+     "max_map": 25,
 
 }
 
@@ -210,7 +229,8 @@ def save_seed_selection_table(data_cosine, data_bm25, data_fusion, avgs, dir, na
         f.write(leaderboard_header_(headers) + "\n")
         for row in data_cosine:
             f.write(leaderboard_row_(row, headers) + "\n")
-        f.write(f"\nAvg ndcg {avgs['cosine']}\n")
+        f.write(f"\nAvg ndcg {avgs['cosine'][0]}\n")
+        f.write(f"\nstd {avgs['cosine'][1]}\n")
         f.write("\n---------------------------------------\n\n")
 
     with open(f"{dir}/{name}", "a") as f:
@@ -218,7 +238,8 @@ def save_seed_selection_table(data_cosine, data_bm25, data_fusion, avgs, dir, na
         f.write(leaderboard_header_(headers) + "\n")
         for row in data_bm25:
             f.write(leaderboard_row_(row, headers) + "\n")
-        f.write(f"\nAvg ndcg {avgs['bm25']}\n")
+        f.write(f"\nAvg ndcg {avgs['bm25'][0]}\n")
+        f.write(f"\nstd {avgs['bm25'][1]}\n")
         f.write("\n---------------------------------------\n\n")
 
     with open(f"{dir}/{name}", "a") as f:
@@ -226,15 +247,27 @@ def save_seed_selection_table(data_cosine, data_bm25, data_fusion, avgs, dir, na
         f.write(leaderboard_header_(headers) + "\n")
         for row in data_fusion:
             f.write(leaderboard_row_(row, headers) + "\n")
-        f.write(f"\nAvg ndcg {avgs['fusion']}\n")
+        f.write(f"\nAvg ndcg {avgs['fusion'][0]}\n")
+        f.write(f"\nstd {avgs['fusion'][1]}\n")
         f.write("\n---------------------------------------\n\n")
 def save_leaderboard(data, dir, name):
-    headers = ['graph_name',"sample_type", "seed_selection", "norm", "alpha", "init", "hops", "k", "recall", "mrr", "ndcg", "map", "weighted_score"]
+    headers = ['graph_name',"sample_type", "Directed", "Weighted", "dist_metric", "pca", "scaler","seed_selection", "norm", "alpha", "init", "hops", "k", "recall", "mrr", "ndcg", "map", "weighted_score"]
     with open(f"{dir}/{name}", "w") as f:
         f.write("")
     for graph in data.keys():
         rows = sorted(data[graph], key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
         with open(f"{dir}/{name}", "a") as f:
+            f.write(leaderboard_header_(headers) + "\n")
+            for row in rows:
+                f.write(leaderboard_row_(row, headers) + "\n")
+            f.write(f"---------------------------------  \n\n")
+
+def save_leaderboard_(data, dir, name):
+    headers = ['graph_name_', "mean_ndcg", "std_ndcg", "max_ndcg", "mean_mrr", "std_mrr", "max_mrr", "mean_recall", "std_recall", "max_recall", "mean_map", "std_map", "max_map"]
+    with open(f"{dir}/{name}", "w") as f:
+        f.write("")
+    rows = sorted(data, key=lambda x: (x["mean_ndcg"], -x["std_ndcg"]), reverse=True)
+    with open(f"{dir}/{name}", "a") as f:
             f.write(leaderboard_header_(headers) + "\n")
             for row in rows:
                 f.write(leaderboard_row_(row, headers) + "\n")
@@ -246,26 +279,17 @@ def save_random_state_table(data, configs ,dir, name):
                'map', "weighted_score"]
     with open(f"{dir}/{name}", "w") as f:
         f.write("")
-    graph_names = data.keys()
-    for graph_name in graph_names:
+    for random_state in data.keys():
         with open(f"{dir}/{name}", "a") as f:
-                f.write(f"graph_name: {graph_name}\n\n")
+                f.write(f"Random state: {random_state}\n\n")
                 f.write(leaderboard_header_(headers) + "\n")
-                for random_state in data[graph_name].keys():
-                    f.write(leaderboard_row_(data[graph_name][random_state], headers) + "\n")
+                for entry in data[random_state]:
+                    f.write(leaderboard_row_(entry, headers) + "\n")
 
 
-                f.write(f"\nMean: {configs[graph_name]['mean']['ndcg']}\n")
-                f.write(f"Stds: {configs[graph_name]['std']['ndcg']}\n")
-                f.write(f"Ndcg: {configs[graph_name]['mean']['ndcg'] + configs[graph_name]['std']['ndcg']} , {configs[graph_name]['mean']['ndcg'] - configs[graph_name]['std']['ndcg']}\n")
-
-                f.write(f"\nMean: {configs[graph_name]['mean']['recall']}\n")
-                f.write(f"Stds: {configs[graph_name]['std']['recall']}\n")
-                f.write(f"Recall: {configs[graph_name]['mean']['recall'] + configs[graph_name]['std']['recall']} , {configs[graph_name]['mean']['recall'] - configs[graph_name]['std']['recall']}\n")
-
-                f.write(f"\nMean: {configs[graph_name]['mean']['mrr']}\n")
-                f.write(f"Stds: {configs[graph_name]['std']['mrr']}\n")
-                f.write(f"Mrr: {configs[graph_name]['mean']['mrr'] + configs[graph_name]['std']['mrr']} , {configs[graph_name]['mean']['mrr'] - configs[graph_name]['std']['mrr']}\n")
+                f.write(f"\nMean: {configs[random_state]['mean']['ndcg']}\n")
+                f.write(f"Stds: {configs[random_state]['std']['ndcg']}\n")
+                f.write(f"Ndcg: {configs[random_state]['mean']['ndcg'] + configs[random_state]['std']['ndcg']} , {configs[random_state]['mean']['ndcg'] - configs[random_state]['std']['ndcg']}\n")
                 f.write(f"----------------------------------\n\n")
 
 def save_param_sensitivity_stats_table(data, dir, name):
@@ -509,16 +533,101 @@ def make_leaderboard_table(file):
             for sample_type, results in sample_types.items():
                     for result in results:
                         params = result.pop("params", {})
+                        graph_params, _ = dt.load_graph_parameters(graph)
+                        if "graph_params" in graph_params:
+                            construction_key = "graph_params"
+                        else:
+                            construction_key = "graph_construction"
 
+                        graph_type = graph_params["graph_type"]
+                        graph_building_algo = graph_params["Graph building algorithm"]
+
+                        if graph_building_algo == "Threshold":
+                            dist_metric = "cosine"
+                        else:
+                            dist_metric = graph_params["Graph building algorithm params"]["metric"],
+                        graph_type = graph_params["graph_type"]
                         flat_entry = {
                             "method": method,
-                            "sample_type": sample_type,
+                            "sample_type": "all_samples",
                             **result,
-                            **params
+                            **params,
+                            "pca": graph_params["preprocess"][0],
+                            "scaler": graph_params["preprocess"][1],
+                            "dist_metric": dist_metric,
+                            "Weighted": graph_params[construction_key]["Weighted"],
+                            "Directed": graph_params[construction_key]["Directed"]
                         }
 
                         all_data[sample_type].append(flat_entry)
     save_leaderboard(all_data, f"Outputs/runs/{file}/tables", "leaderboard.txt")
+
+def make_mean_std_leaderboard(file):
+    grouped = dt.load_grouped(f"Outputs/runs/{file}")
+    graph_family = defaultdict(list)
+    graph_each = defaultdict(list)
+    for graph, methods in grouped.items():
+        for method, sample_types in methods.items():
+            results = grouped[graph][method]['all_samples']
+            for result in results:
+                    params = result.pop("params", {})
+                    if params["alpha"] == 1:
+                        continue
+                    graph_params, _ = dt.load_graph_parameters(graph)
+                    if "graph_params" in graph_params:
+                        construction_key = "graph_params"
+                    else:
+                        construction_key = "graph_construction"
+
+
+                    graph_building_algo = graph_params["Graph building algorithm"]
+
+                    if graph_building_algo == "Threshold":
+                        dist_metric = "cosine"
+                    else:
+                        dist_metric = graph_params["Graph building algorithm params"]["metric"],
+                    graph_type = graph_params["graph_type"]
+                    flat_entry = {
+                        "method": method,
+                        "sample_type": "all_samples",
+                        **result,
+                        **params,
+                        "pca": graph_params["preprocess"][0],
+                        "scaler": graph_params["preprocess"][1],
+                        "dist_metric": dist_metric,
+                        "Weighted": graph_params[construction_key]["Weighted"],
+                        "Directed": graph_params[construction_key]["Directed"]
+                    }
+                    graph_family[graph_type].append(flat_entry)
+                    graph_each[graph].append(flat_entry)
+
+    metrics = ["recall", "mrr", "ndcg", "map"]
+    graph_family_results = []
+    for graph_type in graph_family.keys():
+        means_stds = {}
+        max_scores = {}
+        for metric in metrics:
+            scores = [entry[metric] for entry in graph_family[graph_type]]
+            means_stds[metric] = (np.mean(scores), np.std(scores))
+            max_scores[metric] = max(scores)
+        flat_entry = {
+            "graph_name_": graph_type,
+            "mean_recall": means_stds["recall"][0],
+            "mean_mrr": means_stds["mrr"][0],
+            "mean_ndcg": means_stds["ndcg"][0],
+            "mean_map": means_stds["map"][0],
+            "std_recall": means_stds["recall"][1],
+            "std_mrr": means_stds["mrr"][1],
+            "std_ndcg": means_stds["ndcg"][1],
+            "std_map": means_stds["map"][1],
+            "max_recall": max_scores["recall"],
+            "max_mrr": max_scores["mrr"],
+            "max_ndcg": max_scores["ndcg"],
+            "max_map": max_scores["map"],
+        }
+        graph_family_results.append(flat_entry)
+    save_leaderboard_(graph_family_results, f"Outputs/runs/{file}/tables", "leaderboard_graph_family.txt")
+
 
 
 def make_norm_not_norm_table(file):
@@ -607,19 +716,19 @@ def make_seed_selection_table(file):
     bm25_entries = sorted(bm25_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
     fusion_entries = sorted(fusion_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
     avgs = {}
-    avgs["cosine"] = np.mean([e['ndcg'] for e in cosine_entries])
-    avgs["bm25"] = np.mean([e['ndcg'] for e in bm25_entries])
-    avgs["fusion"] = np.mean([e['ndcg'] for e in fusion_entries])
+    avgs["cosine"] = (np.mean([e['ndcg'] for e in cosine_entries]), np.std([e['ndcg'] for e in cosine_entries]))
+    avgs["bm25"] = (np.mean([e['ndcg'] for e in bm25_entries]), np.std([e['ndcg'] for e in bm25_entries]))
+    avgs["fusion"] = (np.mean([e['ndcg'] for e in fusion_entries]), np.std([e['ndcg'] for e in fusion_entries]))
     best_seed = max(avgs, key=avgs.get)
     best_score = avgs[best_seed]
     dt.freeze_seed(best_seed, best_score)
     save_seed_selection_table(cosine_entries, bm25_entries, fusion_entries, avgs, f"Outputs/runs/{file}/tables", "seed_selection_table")
 
-def make_random_state_table(file, random_states):
+def make_random_state_table(file):
 
     grouped = dt.load_grouped(f"Outputs/runs/{file}")
     entries_scores = defaultdict(dict)
-    entries = defaultdict(dict)
+    entries = defaultdict(list)
     for graph, methods in grouped.items():
         results = grouped[graph]['PPR']['all_samples']
         for result in results:
@@ -636,42 +745,29 @@ def make_random_state_table(file, random_states):
                 "random_state": random_state
             }
 
-            entries[graph_name][random_state] = flat_entry
-            entries_scores[graph_name][random_state] = (flat_entry["ndcg"], flat_entry['recall'], flat_entry['mrr'])
+            entries[random_state].append(flat_entry)
+            entries_scores[random_state][graph_name] = (flat_entry["ndcg"], flat_entry['recall'], flat_entry['mrr'])
 
     config_stats = {}
-    for graph_name, scores_by_seed in entries_scores.items():
+    for random_state, scores_by_graph in entries_scores.items():
 
-        arr = np.array(list(scores_by_seed.values()))
+        arr = np.array(list(scores_by_graph.values()))
 
         mean_ndcg, mean_recall, mean_mrr = arr.mean(axis=0)
         std_ndcg, std_recall, std_mrr = arr.std(axis=0)
 
-        config_stats[graph_name] = {
+        config_stats[random_state] = {
             "mean": {"ndcg": float(mean_ndcg), "recall": float(mean_recall), "mrr": float(mean_mrr)},
             "std": {"ndcg": float(std_ndcg), "recall": float(std_recall), "mrr": float(std_mrr)},
-            "scores": scores_by_seed,
+            "scores": scores_by_graph,
         }
-    best_graph_name = max(
-        config_stats,
-        key=lambda g: (config_stats[g]["mean"]["ndcg"], -config_stats[g]["std"]["ndcg"])
-    )
-    best_stats = config_stats[best_graph_name]
 
-    # --- βήμα 2: μέσα σε αυτό το config, ποιο seed είναι πιο representative ---
-    best_random_state = min(
-        best_stats["scores"],
-        key=lambda rs: abs(best_stats["scores"][rs][0] - best_stats["mean"]["ndcg"])  # [0] = ndcg
-    )
+    for random_state in entries:
+        entries[random_state].sort(
+            key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]),
+            reverse=True
+        )
 
-    best_interval = [best_stats["mean"]["ndcg"] + best_stats["std"]["ndcg"],
-                     best_stats["mean"]["ndcg"] - best_stats["std"]["ndcg"]]
-
-    print(best_interval)
-    print(best_random_state)
-    #best_random_state = max(random_states, key=lambda rs: (means[rs], -stds[rs]))
-    #best_score = ndcgs[best_random_state]
-    #dt.freeze_random_state(best_random_state, best_score)
     save_random_state_table(entries, config_stats, f"Outputs/runs/{file}/tables", "random_state_table")
 
 

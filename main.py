@@ -1,3 +1,5 @@
+import plotting
+
 import experiments as ex
 import data_loading as dt
 import retrieval as rt
@@ -18,7 +20,7 @@ import time
 import plotting as pt
 import tables
 import pandas as pd
-knn_metrics = ['cosine', 'euclidean', 'manhattan', 'minkowski']
+knn_metrics = ['cosine', 'euclidean', 'manhattan', 'chebyshev']
 k_means_algorithms = ['k-means++', 'random']
 rerankers = ['BM25', 'graph_aware', 'cross_encoder']
 
@@ -84,7 +86,7 @@ def get_preprocess_graph_input():
 
 def get_knn_input():
     N_NEIGHBORS = int(input("n_neighbors (int): ").strip())
-    METRIC = input("Metric (cosine/euclidean/manhattan/minkowski): ").strip()
+    METRIC = input("Metric (cosine/euclidean/manhattan/chebyshev): ").strip()
 
     if N_NEIGHBORS <= 0:
         raise ValueError(f"Wrong Input Error: {N_NEIGHBORS}")
@@ -178,15 +180,6 @@ def make_split(query, split_percentage, split_type):
 
 
 if __name__ == "__main__":
-    """Νεα πειραμτα στην επιλογη run experiments, k steph exhaustive, dbscan selection study, ablation study preproces
-       Νεοι πινακες στις συναρτησεις make_random_state_table και αλλαγες στους αλλους πινακες για να παρουσιαζουν καλυτερα
-       τα αποτελεσματα. Επισης για alpha, init και hop εχουν γινει και νεοι πινακες απο την save_param_sensitivity_stats_table
-       που δειχνουν μαζεμενα πως σε καθε γραφο/οικογενεια γραφων η αλλαγη των alpha αλλαζουν τα metrics. Επισης make_spearmanr_table
-       και make_paired_bootstrap_table παλι στην tables.py η make_paired_bootstrap_table για τα queries και η make_spearmanr_table γενικα 
-       για τους γραφους και με βαση αυτα κανω καποια graphs με την συναρτηση make_spearmanr_plots και για την bootstrap forest_plot.
-    """
-
-
 
     MODE = str(input("Choose Mode, Make graphs, Make a test graph, Run experiments, Make embeddings Graph performance "
                      "make query samples: "))
@@ -195,7 +188,7 @@ if __name__ == "__main__":
     #MODE = ""
     if MODE.lower() == "make graphs":
         METHOD = input("All types, kmeans knn, mutual kmeans knn, threshold kmeans knn: ").strip()
-        q, a, c = dt.load_data()
+        _, _, c = dt.load_data()
         preprocess = {"scaler": None, "pca": None}
         graph_params = {"Directed": False, "Weighted": True}
         if METHOD.lower() == "all types":
@@ -210,7 +203,7 @@ if __name__ == "__main__":
         ex.prepare_dataset()
     elif MODE.lower() == "run experiments":
         METHOD = input("baseline, prr calibration study, ppr seed selection study, k steph exhaustive,"
-                       " ppr exhaustive, ablation study preprocess,random state selection study, dbscan selection study: ").strip()
+                       " ppr exhaustive, ablation study preprocess, ablation study metric, ablation study graph construction, random state selection study, dbscan selection study: ").strip()
         if METHOD.lower() == "baseline":
             ex.run_baseline("dev")
             ex.run_baseline("test")
@@ -233,6 +226,10 @@ if __name__ == "__main__":
             ex.k_means_random_state_study()
         elif METHOD.lower() == "ablation study preprocess":
             ex.ablation_study("preprocess")
+        elif METHOD.lower() == "ablation study metric":
+            ex.ablation_study("metric")
+        elif METHOD.lower() == "ablation study graph construction":
+            ex.ablation_study("graph_construction")
 
     elif MODE.lower() == "make query samples":
         make_dev_test_splits()

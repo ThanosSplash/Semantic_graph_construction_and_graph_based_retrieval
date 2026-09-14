@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.pipeline import Pipeline
+
+import clustering
 import plotting
 
 def compute_sse(data, k_range):
@@ -28,7 +30,7 @@ def compute_sse(data, k_range):
 
 
 
-def pipeline(data, scaler, pca):
+def preprocessing_pipeline(data, scaler, pca):
     # Pipeline for the preprocessing of the dataset
     if scaler==None and pca==None:
         return data
@@ -64,7 +66,7 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
     embeddings = np.array(list(data.values()))
     if pipeline_id == 0:
         # Data preprocessing
-        data_preprocessed = pipeline(embeddings, scaler, pca)
+        data_preprocessed = preprocessing_pipeline(embeddings, scaler, pca)
         if kmeans_params["n_clusters"] is None:
             # If n_clusters not defined asks user for an input
             # Computes and plots the sse score so the user can decide how many cluster they should use
@@ -87,16 +89,10 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
     elif pipeline_id == 1:
         # First Agglomerative clustering and after Kmeans
         # Data preprocessing
-        data_preprocessed = pipeline(embeddings, scaler, pca)
-
-        if agglo_params["n_clusters"] is None and agglo_params["distance_threshold"] is None:
-            # If n_clusters and distance_threshold not defined asks user for an input
-            dendrogram(data_preprocessed, agglo_params["linkage"])
-            n = int(input("How much distance threshold: "))
-            agglo_params["distance_threshold"] = n
+        data_preprocessed = preprocessing_pipeline(embeddings, scaler, pca)
         # Running hierarchical clustering
-        agglomerative_clustering = AgglomerativeClustering(n_clusters=agglo_params["n_clusters"],
-                                                           distance_threshold=agglo_params["distance_threshold"],
+        agglomerative_clustering = AgglomerativeClustering(n_clusters=None,
+                                                           distance_threshold=agglo_params["distance_threshold_on_agglo"],
                                                            linkage=agglo_params["linkage"],
                                                            metric=agglo_params["metric"],
                                                            compute_full_tree=agglo_params["compute_full_tree"],
@@ -126,10 +122,10 @@ def dbscan(data, dbscan_params, preprocess):
     # Function that runs dbscan clustering algorithm
     ids = list(data.keys())
     embeddings = np.array(list(data.values()))
-    data_preprocessed = pipeline(embeddings, preprocess["scaler"], preprocess["pca"])
+    data_preprocessed = preprocessing_pipeline(embeddings, preprocess["scaler"], preprocess["pca"])
 
 
-    dbscan_ = DBSCAN(eps=dbscan_params["eps"], min_samples = dbscan_params["min_samples"], metric="cosine")
+    dbscan_ = DBSCAN(eps=dbscan_params["eps"], min_samples = dbscan_params["min_samples"], metric=dbscan_params["metric"])
     clusters = dbscan_.fit_predict(data_preprocessed)
 
     unique_clusters = np.unique(clusters)
@@ -144,10 +140,11 @@ def dbscan(data, dbscan_params, preprocess):
 
 def perform_clustering(data, algorithm, kmeans_params,
                        dbscan_params, agglo_params, preprocess):
-    if algorithm == "kmeans":
+    if algorithm == "kmeans" or algorithm == "agglo_kmeans":
         unique_clusters, clustering_labels, ids, embeddings, fig = kmeans(data, kmeans_params, agglo_params,
-                                                            scaler=preprocess["scaler"],pca=preprocess["pca"],pipeline_id=kmeans_params["pipeline_id"])
-        clustering_result = {
+                                                        scaler=preprocess["scaler"],pca=preprocess["pca"],pipeline_id=kmeans_params["pipeline_id"])
+        if kmeans_params["pipeline_id"] == 0:
+            clustering_result = {
             "unique_clusters": unique_clusters,
             "clustering_labels": clustering_labels,
             "ids": ids,
@@ -157,10 +154,20 @@ def perform_clustering(data, algorithm, kmeans_params,
             "preprocess": preprocess,
             "clustering_algorithm": "kmeans"
         }
+        elif kmeans_params["pipeline_id"] == 1:
+            clustering_result = {
+                "unique_clusters": unique_clusters,
+                "clustering_labels": clustering_labels,
+                "ids": ids,
+                "embeddings": embeddings,
+                "fig": fig,
+                "clustering_params": {**kmeans_params, **agglo_params},
+                "preprocess": preprocess,
+                "clustering_algorithm": "kmeans"
+            }
         return clustering_result
     elif algorithm == "dbscan":
         unique_clusters, clustering_labels, ids, embeddings, fig =  dbscan(data, dbscan_params, preprocess)
-
         clustering_result = {
             "unique_clusters": unique_clusters,
             "clustering_labels": clustering_labels,
@@ -174,15 +181,6 @@ def perform_clustering(data, algorithm, kmeans_params,
         return clustering_result
     else:
         raise ValueError(f"Unknown clustering algorithm: {algorithm}")
-    return
 
-def dendrogram(data, method):
-    # Constructing a dendrogram and saving it for future use
-    Z = linkage(data, method=method)
-    scipy_dendrogram(Z, truncate_mode='level', p=10)  # Περικοπή για ευκολία προβολής
-    plt.title(f"Dendrogram using ward linkage")
-    plt.xlabel('Sample Index or Cluster Size')
-    plt.ylabel('Distance')
-    plt.tight_layout()
-    plt.show()
+
 

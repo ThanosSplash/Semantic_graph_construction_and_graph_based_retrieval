@@ -13,7 +13,7 @@ import nx_parallel
 import igraph as ig
 from collections import defaultdict
 from scipy import stats
-
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
 
 
 def plot_cluster_with_silhouette(data, data_2d, centers, n_clusters, clustering_labels):
@@ -98,9 +98,8 @@ def plot_cluster_with_silhouette(data, data_2d, centers, n_clusters, clustering_
 
 def plot_k_distance_graph(X, k_values):
     plt.figure(figsize=(12, 7))
-
     for k in k_values:
-        neigh = NearestNeighbors(n_neighbors=k, metric = "cosine")
+        neigh = NearestNeighbors(n_neighbors=k, metric="cosine")
         neigh.fit(X)
 
         distances, _ = neigh.kneighbors(X)
@@ -191,7 +190,7 @@ def plot_graph_stats(info_knn,  info_mutual_knn, clustering = "", clusters = 0):
     plt.tight_layout()
     plt.show()
 
-"""-------------------------------------------------------------Make plot functions-------------------------------------------------------------"""
+
 
 def make_plot_for_eval_metric_and_graph_stat(eval_metric, graph_stat, method, sample_type, query_type, file):
     graphs_best_perf = dt.get_each_graph_best_perf(method, sample_type, file, query_type)
@@ -275,8 +274,16 @@ def make_spearmanr_plots(file):
             continue
         make_plot_for_eval_metric_and_graph_stat(stats["metric"], stats["graph_stat"], "PPR", "all_samples", "dev", file)
 
-"""-------------------------------------------------------------Make plot functions-------------------------------------------------------------"""
-"""-------------------------------------------------------------Data gathetring functions-------------------------------------------------------------"""
+
+def plot_dendrogram(data, method):
+    Z = linkage(data, method=method)
+    dendrogram(Z, truncate_mode='level', p=10)
+    plt.title(f"Dendrogram using {method} linkage")
+    plt.xlabel('Sample Index or Cluster Size')
+    plt.ylabel('Distance')
+    plt.tight_layout()
+    plt.savefig(f'Outputs/plots/dendrogram.png',
+                dpi=300, bbox_inches='tight')
 
 
 """-------------------------------------------------------------Data gathetring functions-------------------------------------------------------------"""

@@ -24,19 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent
 
 
 def read_dataset_bioasq(path):
-
     # Loading questions and answers
     dataset = pd.read_parquet(path + "question-answer-passages/train-00000-of-00001.parquet", engine='pyarrow')
     dataset_test = pd.read_parquet("Datasets/rag-mini-bioasq/question-answer-passages/test-00000-of-00001.parquet",
                                    engine='pyarrow')
-
     # Loading text corpus
     dataset_corpus = pd.read_parquet(path + "text-corpus/train-00000-of-00001.parquet", engine='pyarrow')
-
-
-
-
-
     return dataset, dataset_corpus, dataset_test
 
 
@@ -109,11 +102,17 @@ def get_files_with_random_state(directory_name, random_state):
     return final_dir_list
 def get_kmeans_files(directory_name):
     dir_list = os.listdir(directory_name)
-    dir_list_kmeans = [s for s in dir_list if "kmeans" in s.lower()]
+    dir_list_kmeans = [s for s in dir_list if "kmeans" in s.lower() and "agglo_kmeans" not in s.lower()]
     print("Files and directories in '", len(dir_list), "' :")
     # prints all files
     return dir_list_kmeans
 
+def get_agglo_files(directory_name):
+    dir_list = os.listdir(directory_name)
+    dir_list_agglo_kmeans = [s for s in dir_list if "agglo_kmeans" in s.lower()]
+    print("Files and directories in '", len(dir_list), "' :")
+    # prints all files
+    return dir_list_agglo_kmeans
 def get_kmeans_files_for_random_state(directory_name, random_state):
     dir_list = get_kmeans_files(directory_name)
     dir_list_seed = [s for s in dir_list if f"seed{random_state}" in s.lower()]
@@ -753,9 +752,9 @@ def freeze_ppr_spearmanr(spearman_correlation):
 
     with open(f"{BASE_DIR}/Outputs/freeze/spearmanr_correlation_freeze.json", "w") as f:
         f.write(json.dumps(spearman_correlation) + "\n")
-def freeze_dbscan_configs(min_samples, eps, sl_score):
+def freeze_dbscan_configs(min_samples, eps, sl_score, num_of_clusters):
     with open(f"{BASE_DIR}/Outputs/freeze/dbscan_config.json", "w") as f:
-        f.write(json.dumps({"eps": eps, "min_samples": min_samples, "sl_score": sl_score}) + "\n")
+        f.write(json.dumps({"eps": eps, "min_samples": min_samples, "sl_score": sl_score, "clusters": num_of_clusters}) + "\n")
 def get_freeze_norm():
     with open(f"{BASE_DIR}/Outputs/freeze/norm_freeze.json", "r", encoding="utf-8") as f:
             norm = json.load(f)
