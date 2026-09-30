@@ -19,6 +19,16 @@ def test_empty_vals_dev():
 
     assert empty_corpus_vals == []
 
+def test_duplicate_ids_in_dev():
+    """Checking if duplicate ids exists in dev set"""
+    from collections import Counter
+    query_text, _, corpus_text = dt.load_texts()
+    query, _, corpus = dt.load_data()
+    vals = corpus_text.values()
+    print("\nΜοναδικά κείμενα:", len(set(vals)))
+    print("Διπλότυπα:", len(vals) - len(set(vals)))
+    print("'nan' / κενά:", sum(1 for t in vals if str(t).strip() in ("", "nan")))
+    print(Counter(vals).most_common(3))
 
 def test_empty_vals_in_test_set():
     """Testing if saved texts are nan or empties on test set"""
@@ -28,7 +38,6 @@ def test_empty_vals_in_test_set():
         if query_text[id] == "nan" or query_text[id] == "" or query_text[id] == " ":
             empty_query_vals.append(id)
     assert empty_query_vals == []
-
 
 def test_text_emb_same_ids_dev():
     """Testing if dictionary for embeddings and dictionary for texts have the same ids for dev split"""

@@ -474,7 +474,7 @@ def make_kmeans_knn_graph_for_all_params(corpus, preprocess, graph_params, savin
             algorithm = "agglo_kmeans"
         kmeans_params["pipeline_id"] = pipeline_id
         clustering_results = cl.perform_clustering(data=corpus, algorithm=algorithm, kmeans_params=kmeans_params,
-                                                   agglo_params=agglo_params, dbscan_params={}, preprocess=preprocess)
+                                                   agglo_params=agglo_params, preprocess=preprocess)
         for knn_combo in grid_combinations(knn_grid):
                 knn_params = merge(BASE_KNN, knn_combo)
 
@@ -498,7 +498,7 @@ def make_kmeans_mutual_knn_graph_for_all_params(corpus, preprocess, graph_params
             algorithm = "agglo_kmeans"
         kmeans_params["pipeline_id"] = pipeline_id
         clustering_results = cl.perform_clustering(data=corpus, algorithm=algorithm, kmeans_params=kmeans_params,
-                                                   agglo_params=agglo_params, dbscan_params={}, preprocess=preprocess)
+                                                   agglo_params=agglo_params, preprocess=preprocess)
         for knn_combo in grid_combinations(knn_grid):
             knn_params = merge(BASE_KNN, knn_combo)
             name = make_name(f"knn_{cl_name}_{pre_tag}", knn_combo, graph_params, kmeans_combo)
@@ -522,7 +522,7 @@ def make_kmeans_threshold_graph_for_all_params(corpus, preprocess, graph_params,
             algorithm = "agglo_kmeans"
         kmeans_params["pipeline_id"] = pipeline_id
         clustering_results = cl.perform_clustering(data=corpus, algorithm=algorithm, kmeans_params=kmeans_params,
-                                                   agglo_params=agglo_params, dbscan_params={}, preprocess=preprocess)
+                                                   agglo_params=agglo_params, preprocess=preprocess)
         for threshold_combo in grid_combinations(threshold_grid):
             threshold_params = merge(BASE_THRESHOLD, threshold_combo)
             name = make_name(f"threshold_{cl_name}_{pre_tag}", threshold_combo, graph_params, kmeans_combo)
@@ -530,42 +530,9 @@ def make_kmeans_threshold_graph_for_all_params(corpus, preprocess, graph_params,
                                              saving_cluster_graphs, algorithm, saving_total_graph)
 
 
-def make_dbscan_knn_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
-    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
-    for dbscan_combo in grid_combinations(dbscan_grid):
-        dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
-        name = make_name(f"dbscan_{pre_tag}", dbscan_combo, graph_params)
-        clustering_results = cl.perform_clustering(data=corpus, algorithm="dbscan", kmeans_params={}, agglo_params={},
-                                                  dbscan_params=dbscan_params, preprocess=preprocess)
-        for knn_combo in grid_combinations(knn_grid):
-             knn_params = merge(BASE_KNN, knn_combo)
-             name = make_name(f"knn_dbscan_{pre_tag}", dbscan_combo, graph_params, dbscan_combo)
-             build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,saving_cluster_graphs,
-                                               "dbscan", saving_total_graph)
-def make_dbscan_mutual_knn_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
-    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
-    for dbscan_combo in grid_combinations(dbscan_grid):
-        dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
-        name = make_name(f"dbscan_{pre_tag}", dbscan_combo, graph_params)
-        clustering_results = cl.perform_clustering(data=corpus, algorithm="dbscan", kmeans_params={}, agglo_params={},
-                                                  dbscan_params=dbscan_params, preprocess=preprocess)
-        for knn_combo in grid_combinations(knn_grid):
-             knn_params = merge(BASE_KNN, knn_combo)
-             name = make_name(f"knn_dbscan_{pre_tag}", dbscan_combo, graph_params, dbscan_combo)
-             build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,saving_cluster_graphs,
-                                               "dbscan", saving_total_graph)
 
-def make_dbscan_threshold_graph_for_all_params(corpus, preprocess, graph_params, saving_cluster_graphs, saving_total_graph):
-    pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
-    for dbscan_combo in grid_combinations(dbscan_grid):
-         dbscan_params = merge(BASE_DBSCAN, dbscan_combo)
-         clustering_results = cl.perform_clustering(data=corpus, algorithm="dbscan", kmeans_params={}, agglo_params={},
-                                               dbscan_params=dbscan_params, preprocess=preprocess)
-         for threshold_combo in grid_combinations(threshold_grid):
-            threshold_params = merge(BASE_THRESHOLD, threshold_combo)
-            name = make_name(f"threshold_dbscan{pre_tag}", threshold_combo, graph_params, dbscan_combo)
-            build_clustering_threshold_graph(clustering_results, threshold_params, graph_params, preprocess, name, saving_cluster_graphs,
-                                             "dbscan", saving_total_graph)
+
+
 
 def make_kmeans_graph_for_all_params(c, pipeline_id, cl_name):
     for graph_c in graph_combinations:
@@ -577,12 +544,3 @@ def make_kmeans_graph_for_all_params(c, pipeline_id, cl_name):
         make_kmeans_mutual_knn_graph_for_all_params(c, preprocess, graph_params, False, True, pipeline_id, cl_name)
         make_kmeans_threshold_graph_for_all_params(c, preprocess, graph_params, False, True,pipeline_id, cl_name)
 
-def make_dbscan_graph_for_all_params(c):
-    for graph_c in graph_combinations:
-        graph_params = {"Directed": graph_c["Directed"], "Weighted": graph_c["Weighted"]}
-
-    for pre in preprocess_combinations:
-        preprocess = {"scaler": pre["scaler"], "pca": pre["pca"]}
-        make_dbscan_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
-        make_dbscan_mutual_knn_graph_for_all_params(c, preprocess, graph_params, False, True)
-        make_dbscan_threshold_graph_for_all_params(c, preprocess, graph_params, False, True)

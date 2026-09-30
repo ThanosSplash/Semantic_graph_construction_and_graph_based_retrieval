@@ -245,7 +245,7 @@ def make_plot_performance_of_different_graph_types(eval_metric, method, sample_t
 
 def forest_plot(data, sample_type, method, query_type, file):
     """Function that makes a forest plot for paired bootstrap"""
-    metrics = ["recall", "mrr", "ndcg", "map"]
+    metrics = ["recall", "mrr", "ndcg"]
     y_pos = np.arange(len(metrics))
     for graph, stats in data.items():
         # For each graph collects the diffs , ci_lower, ci_higher for each metric
@@ -350,7 +350,6 @@ def calc_graph_stats(graph):
 
     graph_info = {}
 
-
     graph_info["Nodes"] = graph.number_of_nodes()
     graph_info["Edges"] = graph.number_of_edges()
     graph_info["Pagerank Top Nodes"] = rt.pagerank(graph, 5)
@@ -358,34 +357,36 @@ def calc_graph_stats(graph):
     graph_info["top_degree_nodes"] = sorted(graph.degree, key=lambda x: x[1], reverse=True)[:10]
 
     is_directed = graph.is_directed()
-    if is_directed:
-        g_ig = ig.Graph.from_networkx(graph)
-        g_ig = g_ig.as_undirected(mode="collapse", combine_edges="max")
-    else:
-        g_ig = ig.Graph.from_networkx(graph)
-    graph = []
-    if is_directed:
-        mode_cc = "strong"
-    else:
-        mode_cc = "weak"
 
-    components = g_ig.connected_components(mode=mode_cc)
+
+    g_ig_dir = ig.Graph.from_networkx(graph)
+
+
+    if is_directed:
+        g_ig_und = g_ig_dir.as_undirected(mode="collapse", combine_edges="max")
+    else:
+        g_ig_und = g_ig_dir
+
+    if is_directed:
+        components = g_ig_dir.connected_components(mode="strong")
+    else:
+        components = g_ig_und.connected_components()
+
     graph_info["Number of connected components"] = len(components)
     graph_info["largest_component_size"] = max((len(c) for c in components), default=0)
-    partition = g_ig.community_multilevel(weights="weight")
-    node_names = g_ig.vs["_nx_name"]
-    community_list = [set(node_names[idx] for idx in cluster) for cluster in partition]
 
+
+    partition = g_ig_und.community_multilevel(weights="weight")
+    node_names = g_ig_und.vs["_nx_name"]
+    community_list = [set(node_names[idx] for idx in cluster) for cluster in partition]
 
     mod = partition.modularity
     graph_info["Number of communities"] = (len(community_list), mod)
 
-    local_cluster_coefficients = g_ig.transitivity_local_undirected(
+    local_cluster_coefficients = g_ig_und.transitivity_local_undirected(
         weights="weight"
     )
-
     graph_info["avg_clustering"] = float(np.nanmean(local_cluster_coefficients))
-
 
     graph_info = {k: convert(v) for k, v in graph_info.items()}
     return graph_info

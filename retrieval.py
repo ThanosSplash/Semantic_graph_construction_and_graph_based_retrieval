@@ -15,7 +15,7 @@ import transformers
 import torch
 import time
 
-
+DAMPING_FACTOR = 0.85
 
 """-------------------------------------------------------------Help functions-------------------------------------------------------------"""
 def get_dev_test_queries(query_type):
@@ -138,7 +138,7 @@ def pagerank(graph, k, nodes=None):
     """
     adjacency = csr_matrix(nx.to_scipy_sparse_array(graph, format='csr'))
     # Running Pagerank algorithm
-    pagerank_ = PageRank()
+    pagerank_ = PageRank(damping_factor=DAMPING_FACTOR)
     scores = pagerank_.fit_predict(adjacency)
     node_labels = list(graph.nodes())
     node_scores = tuple(zip(node_labels, scores))
@@ -178,7 +178,7 @@ def ppr_for_given_nodes(graph, init_nodes, sims, retrieved_ids, adjacency, node_
     weights = {idx: score / total for idx, score in zip(valid_indices, valid_scores)}
 
     # Running Pagerank algorithm
-    pagerank = PageRank()
+    pagerank = PageRank(damping_factor=DAMPING_FACTOR)
     # Calculating the graph score for all the nodes
     scores_personal = pagerank.fit_predict(adjacency, weights)
     # Choosing the nodes in the retrieved_ids
@@ -317,8 +317,8 @@ def rerank_bm25(query_id, query_type, retrieved_ids, alpha, norm_pipeline):
 
     if norm_pipeline != "":
         sim_norm = normalize_dict(sim_dict, norm_pipeline)
-        ppr_norm = normalize_dict(bm25_dict, norm_pipeline)
-        final_scores = fusion(retrieved_ids, sim_norm, ppr_norm, alpha)
+        bm25_norm = normalize_dict(bm25_dict, norm_pipeline)
+        final_scores = fusion(retrieved_ids, sim_norm, bm25_norm, alpha)
     else:
         # Calculating total scores for each node
         final_scores = fusion(retrieved_ids, sim_dict, bm25_dict, alpha)
@@ -340,8 +340,6 @@ def top_k(query_id, query_type, sim_function, k):
        sim_dict, query_correct_results = sim_scores_for_query(query_id, query_type)
    elif sim_function == "bm25":
        sim_dict, query_correct_results = bm25_scores_for_query(query_id, query_type)
-   elif sim_function == "fusion":
-       sim_dict, query_correct_results = fusion_scores_for_query(query_id, query_type)
    else:
        raise ValueError(f"Wrong similarity function {sim_function}")
 
@@ -379,7 +377,7 @@ def personalised_pagerank(graph, adjacency, node_to_idx, global_node_list, init_
     weights = {idx: score / total for idx, score in zip(valid_indices, valid_scores)}
 
     # Running Pagerank algorithm
-    pagerank = PageRank()
+    pagerank = PageRank(damping_factor=DAMPING_FACTOR)
     # Calculating the graph score and similarity score for all the nodes
     scores_personal = pagerank.fit_predict(adjacency, weights)
     graph_scores = dict(zip(graph.nodes(), scores_personal))
@@ -423,64 +421,6 @@ def k_step_neighborhood_expansion(graph, init_nodes, query_id, k, hops, alpha, s
 
     return pred_ids, pred_scores
 
-
-
-
-
-def hits(graph, root_set, k, max_iter=300):
-
-    base_set = set(root_set)
-    D = graph.to_directed()
-    for node in root_set:
-        if node in graph:
-            base_set.update(D.successors(node))
-            base_set.update(D.predecessors(node))
-
-    H = D.subgraph(base_set).copy()
-
-    hubs, auth = nx.hits(H, max_iter=max_iter, normalized=True)
-    alpha = 0.5
-    score = {
-        n: alpha * auth[n] + (1 - alpha) * hubs[n]
-        for n in hubs
-    }
-
-    top = sorted(score.items(), key=lambda x: -x[1])
-
-    return [n for n, _ in top[:k]]
-
-
-def shortest_path(graph, query_id, init_nodes, k, alpha, sims, reranker_type, query_type, norm_pipeline):
-    """Given the graph find the shortest path between the init_nodes and using the rerankers find the nodes with the
-    highest score
-    graph: The semantic graph
-    query_id: The id of the query
-    init_nodes: The nodes that are used in the graph_aware reranker and in the function get_nodes_in_shortest_paths to
-    calculate the shortest patch between them
-    k: number of items to be retrieved
-    alpha: Variable used to calculate the final score
-    sims: Similarities for the graph_aware reranker
-    reranker_type: Name of the reranker function to use
-    :return:
-    """
-
-    # Finding the nodes in the shortest path between the init_nodes
-    nodes_in_path = get_nodes_in_shortest_paths(graph, init_nodes)
-
-    # Calculating the final score based on the chosen reranker
-    final_scores = []
-    if reranker_type == "graph_aware":
-        final_scores = rerank_graph_aware(graph, query_id, nodes_in_path, init_nodes, sims, alpha, query_type, norm_pipeline)
-    elif reranker_type == "cross_encoder":
-        final_scores = rerank_cross_encoder(query_id, query_type, nodes_in_path, norm_pipeline)
-    elif reranker_type == "BM25":
-        final_scores = rerank_bm25(query_id, query_type, nodes_in_path, alpha, norm_pipeline)
-    # Choosing the topk and return the ids and its scores
-    top_k = final_scores[:k]
-    pred_ids = [node_id for node_id, _ in top_k]
-    pred_scores = [score for _, score in top_k]
-
-    return pred_ids, pred_scores
 
 """-------------------------------------------------------------Retrieval Techniques-------------------------------------------------------------"""
 

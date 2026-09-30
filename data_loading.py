@@ -55,6 +55,24 @@ def save_data(dataset_embs, dataset_text, dataset_test_emb, dataset_test_text):
     with open(file_path, "wb") as f:
         pickle.dump(data, f)
 
+def print_dataset_info():
+    query_text, _, corpus_text = load_texts()
+    query, _, corpus = load_data()
+    query_text_test, _ = load_texts_tests()
+    query_test, _ = load_data_tests()
+
+    print(f"Dev set corpus {len(corpus_text.keys())}, {len(corpus.keys())}")
+    print(f"Dev set queries {len(query_text.keys())}, {len(query.keys())}")
+    print(f"Test set queries {len(query_text_test.keys())}, {len(query_test.keys())}")
+
+    vals = corpus_text.values()
+    print("\nDev One of a kind passages:", len(set(vals)))
+    print("Double:", len(vals) - len(set(vals)))
+    print("'nan' / empty:", sum(1 for t in vals if str(t).strip() in ("", "nan")))
+    import hashlib
+    path = "Datasets/rag-mini-bioasq/text-corpus/train-00000-of-00001.parquet"
+    print(hashlib.sha256(open(path, "rb").read()).hexdigest())
+
 
 
 def save_split(small, medium, long, dir, type):
@@ -263,6 +281,27 @@ def load_graph_parameters(name):
 """-----------------------------------------------------------------------------Load graph info-----------------------------------------------------------------------------"""
 
 """-----------------------------------------------------------------------------Extract from retrieval results------------------------------------------------------------"""
+def get_top_2_graph_families(method, sample_type, file, query_type):
+    top_graphs = get_each_graph_best_perf(method, sample_type, file, query_type)
+    top_2_graphs = []
+    for top_graphs in top_graphs:
+        graph = top_graphs["graph"]
+        if graph not in top_2_graphs:
+            top_2_graphs.append(graph)
+
+    graph_params_1, _ = load_graph_parameters(top_2_graphs[0])
+    graph_params_2, _ = load_graph_parameters(top_2_graphs[1])
+    graph_families = [graph_params_1["graph_type"], graph_params_2["graph_type"]]
+    seperate_results(file, query_type)
+    grouped_results = load_grouped(f"Outputs/runs/{file}")
+    all_graphs = []
+    for graph, methods in grouped_results.items():
+        graph_params, _ = load_graph_parameters(graph)
+        graph_type = graph_params["graph_type"]
+        if graph_type in graph_families:
+            all_graphs.append(graph)
+
+    return all_graphs
 def get_top_3_best_performing_graphs(method, sample_type, file, query_type):
     # For a given method and sample type return the top best performing graphs
 
@@ -475,7 +514,7 @@ def load_results_file(dir):
                 "density": density,
                 "components": components,
                 "latency": latency,
-                "weighted_score": 0.4*float(r["ndcg"]) + 0.3*float(r["recallk"]) + 0.3*float(r["mrr"]),
+                "weighted_score": 0.6*float(r["ndcg"]) + 0.2*float(r["recallk"]) + 0.2*float(r["mrr"]),
                 "params": params
             })
     return grouped
@@ -502,10 +541,10 @@ def seperate_results(dir, query_type):
         for method, sample_types in methods.items():
             for sample_type, rows in sample_types.items():
                 rows.sort(
-                    key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]),
+                    key=lambda x: (x["weighted_score"], -x["latency"]),
                     reverse=True
                 )
-
+    #(x["ndcg"], x["recall"], x["mrr"], -x["latency"])
     with open(f"Outputs/runs/{dir}/grouped.pkl", "wb") as f:
         pickle.dump(grouped_by_weighted_score, f, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -706,87 +745,5 @@ def extract_best_run_and_compare_to_baseline(queries, baseline_queries, best_par
 
 """-----------------------------------------------------------------------------For query table------------------------------------------------------------------------------------------------------------------------------"""
 
-def freeze_norm(best_norm, score):
-    with open(f"{BASE_DIR}/Outputs/freeze/norm_freeze.json", "w") as f:
-        f.write(json.dumps({"Norm": best_norm, "ndcg_score": score}) + "\n")
-def freeze_seed(best_seed, score):
-    with open(f"{BASE_DIR}/Outputs/freeze/seed_freeze.json", "w") as f:
-        f.write(json.dumps({"Seed selection": best_seed, "ndcg_score": score}) + "\n")
 
-def freeze_random_state(random_state, scores):
-    with open(f"{BASE_DIR}/Outputs/freeze/random_state_freeze.json", "w") as f:
-        f.write(json.dumps({"random state": random_state, "ndcg_score": scores}) + "\n")
 
-def freeze_ppr_configs(file, sample_type, query_type):
-    top_3_fusion = get_top_3_best_performing_graphs("PPR", sample_type, file, query_type)
-    ppr_config_fusion = {
-        "graph" : top_3_fusion[0]["graph"],
-        "method": top_3_fusion[0]["method"],
-        "sample_type": top_3_fusion[0]["sample_type"],
-        "params": top_3_fusion[0]["params"]
-    }
-    with open(f"{BASE_DIR}/Outputs/freeze/ppr_fusion_configs_freeze_{sample_type}.json", "w") as f:
-        f.write(json.dumps(ppr_config_fusion) + "\n")
-
-    top_3 = get_top_3_best_performing_graphs_for_alpha("PPR", sample_type, file, query_type, 0.0)
-    ppr_config = {
-        "graph": top_3[0]["graph"],
-        "method": top_3[0]["method"],
-        "sample_type": top_3[0]["sample_type"],
-        "params": top_3[0]["params"]
-    }
-    with open(f"{BASE_DIR}/Outputs/freeze/ppr_configs_freeze_{sample_type}.json", "w") as f:
-        f.write(json.dumps(ppr_config) + "\n")
-
-def freeze_k_steph_configs(file, sample_type, query_type):
-    top_5_fusion = get_top_3_best_performing_graphs("k-steph", sample_type, file, query_type)
-    k_steph_config = {
-        "graph": top_5_fusion[0]["graph"],
-        "method": top_5_fusion[0]["method"],
-        "sample_type": top_5_fusion[0]["sample_type"],
-        "params": top_5_fusion[0]["params"]
-    }
-    with open(f"{BASE_DIR}/Outputs/freeze/k_steph_configs_freeze_{sample_type}.json", "w") as f:
-        f.write(json.dumps(k_steph_config) + "\n")
-def freeze_ppr_spearmanr(spearman_correlation):
-
-    with open(f"{BASE_DIR}/Outputs/freeze/spearmanr_correlation_freeze.json", "w") as f:
-        f.write(json.dumps(spearman_correlation) + "\n")
-def freeze_dbscan_configs(min_samples, eps, sl_score, num_of_clusters):
-    with open(f"{BASE_DIR}/Outputs/freeze/dbscan_config.json", "w") as f:
-        f.write(json.dumps({"eps": eps, "min_samples": min_samples, "sl_score": sl_score, "clusters": num_of_clusters}) + "\n")
-def get_freeze_norm():
-    with open(f"{BASE_DIR}/Outputs/freeze/norm_freeze.json", "r", encoding="utf-8") as f:
-            norm = json.load(f)
-    return norm["Norm"]
-def get_freeze_seed():
-    with open(f"{BASE_DIR}/Outputs/freeze/seed_freeze.json", "r", encoding="utf-8") as f:
-            norm = json.load(f)
-    return norm["Seed selection"]
-
-def get_freeze_random_state():
-    with open(f"{BASE_DIR}/Outputs/freeze/random_state_freeze.json", "r", encoding="utf-8") as f:
-            norm = json.load(f)
-    return norm["random state"]
-def get_freeze_ppr_fusion_configs(sample_type):
-    with open(f"{BASE_DIR}/Outputs/freeze/ppr_fusion_configs_freeze_{sample_type}.json", "r", encoding="utf-8") as f:
-            ppr_configs = json.load(f)
-    return ppr_configs
-def get_freeze_ppr_configs(sample_type):
-    with open(f"{BASE_DIR}/Outputs/freeze/ppr_configs_freeze_{sample_type}.json", "r", encoding="utf-8") as f:
-            ppr_configs = json.load(f)
-    return ppr_configs
-def get_freeze_k_steph_configs(sample_type):
-    with open(f"{BASE_DIR}/Outputs/freeze/k_steph_configs_freeze_{sample_type}.json", "r", encoding="utf-8") as f:
-            k_steph_configs = json.load(f)
-    return k_steph_configs
-
-def get_dbscan_configs():
-    with open(f"{BASE_DIR}/Outputs/freeze/dbscan_config.json", "r", encoding="utf-8") as f:
-            dbscan_configs = json.load(f)
-    return dbscan_configs
-
-def get_spearmanr_freeze():
-    with open(f"{BASE_DIR}/Outputs/freeze/spearmanr_correlation_freeze.json", "r") as f:
-        spearmanr_correlation = json.load(f)
-    return spearmanr_correlation

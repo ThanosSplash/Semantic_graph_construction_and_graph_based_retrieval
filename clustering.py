@@ -48,7 +48,7 @@ def preprocessing_pipeline(data, scaler, pca):
         pca.fit(data_scaled)
         variance = pca.explained_variance_ratio_
         cumulative_variance = np.cumsum(variance)
-        threshold_variance = 0.95
+        threshold_variance = 0.85
         n_components = np.argmax(cumulative_variance >= threshold_variance) + 1
         pca_plot = PCA(n_components=n_components)
         data_pca = pca_plot.fit_transform(data_scaled)
@@ -118,28 +118,11 @@ def kmeans(data, kmeans_params, agglo_params, scaler=None, pca=None, pipeline_id
     raise ValueError(f"Invalid pipeline_id: {pipeline_id}")
 
 
-def dbscan(data, dbscan_params, preprocess):
-    # Function that runs dbscan clustering algorithm
-    ids = list(data.keys())
-    embeddings = np.array(list(data.values()))
-    data_preprocessed = preprocessing_pipeline(embeddings, preprocess["scaler"], preprocess["pca"])
-
-
-    dbscan_ = DBSCAN(eps=dbscan_params["eps"], min_samples = dbscan_params["min_samples"], metric=dbscan_params["metric"])
-    clusters = dbscan_.fit_predict(data_preprocessed)
-
-    unique_clusters = np.unique(clusters)
-    data_2d = PCA(n_components=2).fit_transform(data_preprocessed)
-    cluster_centers = np.array([data_preprocessed[clusters == cluster].mean(axis=0) for cluster in unique_clusters])
-    fig = plotting.plot_cluster_with_silhouette(data_preprocessed, data_2d, cluster_centers,
-                                          len(unique_clusters), clusters)
-
-    return unique_clusters, clusters, ids, embeddings, fig
 
 
 
 def perform_clustering(data, algorithm, kmeans_params,
-                       dbscan_params, agglo_params, preprocess):
+                       agglo_params, preprocess):
     if algorithm == "kmeans" or algorithm == "agglo_kmeans":
         unique_clusters, clustering_labels, ids, embeddings, fig = kmeans(data, kmeans_params, agglo_params,
                                                         scaler=preprocess["scaler"],pca=preprocess["pca"],pipeline_id=kmeans_params["pipeline_id"])
@@ -165,19 +148,6 @@ def perform_clustering(data, algorithm, kmeans_params,
                 "preprocess": preprocess,
                 "clustering_algorithm": "kmeans"
             }
-        return clustering_result
-    elif algorithm == "dbscan":
-        unique_clusters, clustering_labels, ids, embeddings, fig =  dbscan(data, dbscan_params, preprocess)
-        clustering_result = {
-            "unique_clusters": unique_clusters,
-            "clustering_labels": clustering_labels,
-            "ids": ids,
-            "embeddings": embeddings,
-            "fig": fig,
-            "clustering_params": dbscan_params,
-            "preprocess": preprocess,
-            "clustering_algorithm": "dbscan"
-        }
         return clustering_result
     else:
         raise ValueError(f"Unknown clustering algorithm: {algorithm}")

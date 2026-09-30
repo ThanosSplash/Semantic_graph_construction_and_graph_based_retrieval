@@ -25,9 +25,29 @@ import plotting as pt
 import clustering as cl
 from sklearn.metrics import silhouette_samples, silhouette_score
 from sklearn.cluster import DBSCAN
-"""-------------------------------------------------------------Help functions-------------------------------------------------------------"""
+seed_selection_method = "cosine"
+normalization = "Min_Max"
+random_state = 42
 
-"""-------------------------------------------------------------Help functions-------------------------------------------------------------"""
+best_ppr = {
+    "graph": "knn_scNone_pcaNone_Directed_False_Weighted_True_neighbors_10_metriccosine",
+    "k": 20,
+    "alpha": 0.5,
+    "init": 2,
+    "normalization": "Min_Max",
+    "seed_selection": "cosine"
+}
+
+best_k_steph = {
+    "graph": "knn_scNone_pcaNone_Directed_False_Weighted_True_neighbors_5_metriccosine",
+    "k": 20,
+    "alpha": 0.8,
+    "init": 2,
+    "hops": 2,
+    "reranker": "BM25",
+    "normalization": "Min_Max",
+    "seed_selection": "cosine"
+}
 def prepare_all():
     prepare_dataset()
     return
@@ -57,7 +77,7 @@ def rearrange_results_and_save(method, scores, results_file, params, predictions
     rr_total = [eval[1] for eval in scores["rr"]]
     recall_map = {r[0]: r[1] for r in scores["recall"]}
     ndcg_map = {r[0]: r[1] for r in scores["ndcg"]}
-    map_map = {r[0]: r[1] for r in scores["ndcg"]}
+    map_map = {r[0]: r[1] for r in scores["avg_precisions"]}
     eval_results_for_each_query = {eval[0]: {"mrr": eval[1],
                                     "rank": eval[2] ,
                                     "recall": recall_map[eval[0]],
@@ -244,81 +264,22 @@ def k_steph_search(query_ids, graph, reranker_type, k, hops, alpha, results_file
     rearrange_results_and_save("k-steph", eval_scores, results_file, params, predictions_per_query, relevant_passage_ids_per_query, latency_per_query, query_type)
     return eval_scores, params, total_latency
 
-def hits_search(query_ids, graph, graph_type, k, alpha, results_file, init, sample_type, file_name, query_type, seed_selection):
-    rr_scores = []
-    recallk_scores = []
-    ndcg_scores = []
-    avg_precisions = []
-    eval_scores = {}
-    params = {}
-    for query_id in query_ids:
-        imporant_nodes, correct, sims = rt.top_k(query_id, query_type, seed_selection, init)
-        predictions = rt.hits(graph, imporant_nodes, k)
-        recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
-        score, rank = ev.RR_score(predictions, correct)
-        rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
-        avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
-
-    eval_scores["recall"] = recallk_scores
-    eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = ndcg_scores
-    eval_scores["avg_precisions"] = avg_precisions
-    params["k"] = k
-    params["reranker"] = ""
-    params["sample_type"] = sample_type
-    params["init"] = init
-    params["graph"] = file_name
-    params["seed_selection"] = seed_selection
-    rearrange_results_and_save("Hits", eval_scores, results_file, params, query_type)
-    return
-
-def shortest_path_search(query_ids, graph, reranker_type, k, alpha, results_file, init, sample_type, file_name, query_type, seed_selection):
-    rr_scores = []
-    recallk_scores = []
-    ndcg_scores = []
-    avg_precisions = []
-    eval_scores = {}
-    params = {}
-    for query_id in query_ids:
-        imporant_nodes, correct, sims = rt.top_k(query_id, query_type, seed_selection, init)
-        predictions, _ = rt.shortest_path(graph, query_id,imporant_nodes, k, alpha, sims, reranker_type, query_type)
-        # print(predictions)
-        # print(correct)
-        # print("---------------")
-        recallk_scores.append((query_id, ev.recallk_score(predictions, correct, k)))
-        score, rank = ev.RR_score(predictions, correct)
-        rr_scores.append((query_id, score, rank))
-        ndcg_scores.append((query_id, ev.nDCGk_score(predictions, correct, k)))
-        avg_precisions.append((query_id, ev.avg_precision(predictions, correct, k)))
-
-    eval_scores["recall"] = recallk_scores
-    eval_scores["rr"] = rr_scores
-    eval_scores["ndcg"] = ndcg_scores
-    eval_scores["avg_precisions"] = avg_precisions
-    params["k"] = k
-    params["reranker"] = reranker_type
-    params["sample_type"] = sample_type
-    params["init"] = init
-    params["seed_selection"] = seed_selection
-    rearrange_results_and_save("Shortest Path", eval_scores, results_file, params, query_type)
-    return
 """-------------------------------------------------------------Search-------------------------------------------------------------"""
 """-------------------------------------------------------------Experiments-------------------------------------------------------------"""
 
 def run_retrieval_ppr_deep_sensitivity_experiment():
     small, medium, long = dt.load_splits_dev()
 
-    files = dt.get_files_with_random_state("Outputs/graphs", 42)
+    files = dt.get_files_with_random_state("Outputs/graphs", random_state)
 
     # Parameter grids
     k_retrive = [5, 10, 20]
     alphas = [0 ,0.2, 0.5, 0.8, 1.0]
     inits = [2, 5, 10, 50]
-    norm_pipeline = dt.get_freeze_norm()
+    norm_pipeline = normalization
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     query_type = "dev"
-    seed_selection = dt.get_freeze_seed()
+    seed_selection = seed_selection_method
     EXPERIMENT_NAME = "deep sensitivity experiment"
     NOTES = "testing ppr for a lot of different parameters for a small chunk of data for debug"
     SPLITS_USED = "dev split"
@@ -377,10 +338,10 @@ def ablation_study(param_to_study):
     k_retrive = [5, 10, 20]
     alphas = [0, 0.2, 0.5, 0.8, 1.0]
     inits = [2, 5, 10, 50]
-    norm_pipeline = dt.get_freeze_norm()
+    norm_pipeline = normalization
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     query_type = "dev"
-    seed_selection = dt.get_freeze_seed()
+    seed_selection = seed_selection_method
     EXPERIMENT_NAME = f"deep sensitivity experiment for different params in the contruction of the graph {param_to_study}"
     NOTES = "testing ppr for a lot of different parameters for a small chunk of data for debug"
     SPLITS_USED = "dev split"
@@ -429,10 +390,10 @@ def run_retrieval_ppr_deep_sensitivity_experiment_for_agglo():
     k_retrive = [5, 10, 20]
     alphas = [0, 0.2, 0.5, 0.8, 1.0]
     inits = [2, 5, 10, 50]
-    norm_pipeline = dt.get_freeze_norm()
+    norm_pipeline = normalization
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     query_type = "dev"
-    seed_selection = dt.get_freeze_seed()
+    seed_selection = seed_selection_method
     EXPERIMENT_NAME = "deep sensitivity experiment for agglo kmeans"
     NOTES = "testing ppr for a lot of different parameters for a small chunk of data for debug"
     SPLITS_USED = "dev split"
@@ -482,18 +443,18 @@ def run_retrieval_ppr_deep_sensitivity_experiment_for_agglo():
 def run_retrieval_k_steph(reranker, files=None):
     small, medium, long = dt.load_splits_dev()
     if files is None:
-        files =  dt.get_files_with_random_state("Outputs/graphs", 42)
+        files = dt.get_files_with_random_state("Outputs/graphs", 42)
 
 
     # Parameter grids
     k_retrive = [5, 10, 20]
     alphas = [0 ,0.2, 0.5, 0.8, 1.0]
-    inits = [2, 5, 10, 20, 50]
-    hops = [1, 2, 3, 4]
+    inits = [2, 5, 10]
+    hops = [1, 2, 3]
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     query_type = "dev"
-    norm_pipeline = dt.get_freeze_norm()
-    seed_selection = dt.get_freeze_seed()
+    norm_pipeline = normalization
+    seed_selection = seed_selection_method
 
     EXPERIMENT_NAME = "deep sensitivity experiment k steph"
     NOTES = "k steph for a lot of different parameters "
@@ -548,11 +509,152 @@ def run_retrieval_k_steph(reranker, files=None):
             pt.make_plot_performance_of_different_graph_types(metric, "k-steph", sample_type, "dev",
                                                               run_id)
 
+def reranker_study(reranker, files=None):
+    small, medium, long = dt.load_splits_dev()
+    if files is None:
+        files = dt.get_files_with_random_state("Outputs/graphs", 42)
 
 
+    # Parameter grids
+    k_retrive = [5, 10, 20]
+    alphas = [0 ,0.2, 0.5, 0.8, 1.0]
+    inits = [2, 5, 10]
+    hops = [1, 2, 3]
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    query_type = "dev"
+    norm_pipeline = normalization
+    seed_selection = seed_selection_method
+
+    EXPERIMENT_NAME = f"reranker experiment on k steph for {reranker}"
+    NOTES = "k steph experiment for reranker BM25 "
+    SPLITS_USED = "dev split"
+    parameters = {'alphas': alphas, 'k': k_retrive, 'inits': inits, "hops": hops,"norm_pipeline": norm_pipeline
+        , "query_type": query_type, "seed_selection": seed_selection}
+    run_id = dt.make_run_id(EXPERIMENT_NAME)
+    save_dir = dt.setup_run_dir(run_id, NOTES, SPLITS_USED, parameters)
+    dt.sanity_check(small + medium + long, save_dir, query_type)
 
 
+    pbar = tqdm(range(len(files)))
+    for i in pbar:
+        file = files[i]
+        pbar.set_description(f"Processing {files[i]}")
+        graph = dt.load_graph(file)
+        # --- k_steph_search: sweep rerankers × alphas × inits × sample sets ---
+        for k in k_retrive:
+            for alpha in alphas:
+                for init in inits:
+                    for hop in hops:
+                        eval_scores = None
+                        params = None
+                        total_latency = 0.0
+                        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                            scores, p, latency = k_steph_search(dataset, graph, reranker, k, hop, alpha,
+                                                       save_dir, init, name, file, run_id, query_type, norm_pipeline, seed_selection)
 
+                            total_latency += latency
+                            if eval_scores is None:
+                                eval_scores, params = scores, p
+                            else:
+                                for m in metrics:
+                                    eval_scores[m] += scores[m]
+                        params["sample_type"] = "all_samples"
+                        rearrange_results_and_save_for_all_samples("k-steph", eval_scores, save_dir, params, query_type,
+                                                                   total_latency)
+
+
+    tables.make_k_steph_tables(run_id, query_type)
+
+def run_ppr_on_test_set():
+    small, medium, long = dt.load_splits_test()
+    # Parameter grids
+    k = best_ppr["k"]
+    alpha = best_ppr["alpha"]
+    init = best_ppr["init"]
+    norm_pipeline = best_ppr["normalization"]
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    query_type = "test"
+    seed_selection = best_ppr["seed_selection"]
+    EXPERIMENT_NAME = "Test set for ppr"
+    NOTES = "testing prr  for test set"
+    SPLITS_USED = "test split"
+    parameters = {'alphas': alpha, 'k': k, 'inits': init, "norm_pipeline": norm_pipeline
+        , "query_type": query_type, "seed_selection": seed_selection}
+    run_id = dt.make_run_id(EXPERIMENT_NAME)
+    save_dir = dt.setup_run_dir(run_id, NOTES, SPLITS_USED, parameters)
+    dt.sanity_check(small + medium + long, save_dir, query_type)
+    pbar = tqdm(range(len([best_ppr["graph"]])))
+    for i in pbar:
+        file = best_ppr["graph"]
+        pbar.set_description(f"Processing {file}")
+        graph = dt.load_graph(file)
+
+        eval_scores = None
+        params = None
+        total_latency = 0.0
+        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+            scores, p, latency = personalised_pagerank_search(dataset, graph, k, save_dir, init,
+                                                                          name, alpha, file, run_id, query_type,
+                                                                          norm_pipeline,
+                                                                          seed_selection)
+            total_latency += latency
+            if eval_scores is None:
+               eval_scores, params = scores, p
+            else:
+               for m in metrics:
+                   eval_scores[m] += scores[m]
+        params["sample_type"] = "all_samples"
+        rearrange_results_and_save_for_all_samples("PPR", eval_scores, save_dir, params,
+                                                               query_type, total_latency)
+
+    tables.make_ppr_tables(run_id, "test")
+
+def run_k_steph_on_test_set():
+    small, medium, long = dt.load_splits_test()
+    # Parameter grids
+    k = best_k_steph["k"]
+    alpha = best_k_steph["alpha"]
+    init = best_k_steph["init"]
+    hop = best_k_steph["hops"]
+    metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    query_type = "test"
+    norm_pipeline = best_k_steph["normalization"]
+    reranker = best_k_steph["reranker"]
+    seed_selection = best_k_steph["seed_selection"]
+
+    EXPERIMENT_NAME = "test set for k-steph"
+    NOTES = "k steph for test set "
+    SPLITS_USED = "test split"
+    parameters = {'alphas': alpha, 'k': k, 'inits': init, "hops": hop, "norm_pipeline": norm_pipeline
+        , "query_type": query_type, "seed_selection": seed_selection}
+    run_id = dt.make_run_id(EXPERIMENT_NAME)
+    save_dir = dt.setup_run_dir(run_id, NOTES, SPLITS_USED, parameters)
+    dt.sanity_check(small + medium + long, save_dir, query_type)
+
+    pbar = tqdm(range(len([best_k_steph["graph"]])))
+    for i in pbar:
+        file = best_k_steph["graph"]
+        pbar.set_description(f"Processing {file}")
+        graph = dt.load_graph(file)
+        eval_scores = None
+        params = None
+        total_latency = 0.0
+        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                 scores, p, latency = k_steph_search(dataset, graph, reranker, k, hop, alpha,
+                                                                save_dir, init, name, file, run_id, query_type,
+                                                                norm_pipeline, seed_selection)
+
+                 total_latency += latency
+                 if eval_scores is None:
+                    eval_scores, params = scores, p
+                 else:
+                     for m in metrics:
+                         eval_scores[m] += scores[m]
+        params["sample_type"] = "all_samples"
+        rearrange_results_and_save_for_all_samples("k-steph", eval_scores, save_dir, params, query_type,
+                                                                   total_latency)
+
+    tables.make_k_steph_tables(run_id, query_type)
 
 def run_an_example_retrieval_ppr():
     small, medium, long = dt.load_splits_dev()
@@ -593,7 +695,6 @@ def run_an_example_retrieval_ppr():
     tables.make_alpha_sensitivity_table(run_id)
     tables.make_init_sensitivity_table(run_id)
     tables.make_graph_construction_sensitivity_table(run_id)
-
 
 def run_an_example_retrieval_k_steph():
     small, medium, long = dt.load_splits_dev()
@@ -640,7 +741,6 @@ def run_an_example_retrieval_k_steph():
     tables.make_graph_construction_sensitivity_table(run_id)
     tables.make_hop_sensitivity_table(run_id)
 
-
 def run_baseline(query_type):
     """Function that calculate baseline scores"""
     # loading the correct split
@@ -672,10 +772,6 @@ def run_baseline(query_type):
                     eval_scores[m] += scores[m]
         params["sample_type"] = "all_samples"
         rearrange_results_and_save_for_all_samples("Baseline", eval_scores, "Outputs/Baseline-RAG", params, query_type, total_latency)
-
-
-
-
 
 def ppr_score_calibration_study():
     small, medium, long = dt.load_splits_dev()
@@ -780,10 +876,10 @@ def k_means_random_state_study():
     all_samples = small + medium + long
     alpha = 0.5
     init = 2
-    norm_pipeline = "Min_Max"
+    norm_pipeline = normalization
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
     query_type = "dev"
-    seed_selection = "cosine"
+    seed_selection = seed_selection_method
     k = 10
     random_states = [1, 7, 21, 42, 84]
     EXPERIMENT_NAME = "kmeans_random_state_selection_study"
@@ -809,46 +905,6 @@ def k_means_random_state_study():
     dt.seperate_results(run_id, query_type)
     tables.make_random_state_table(run_id)
 
-
-def dbscan_param_selection_study():
-
-    epsilons = np.linspace(0.4, 0.55, num=30)
-    min_samples = np.arange(2, 25, step=2)
-    combinations = list(itertools.product(epsilons, min_samples))
-    _, _, c = dt.load_data()
-    scores = []
-    all_label_list = []
-    all_num_label = []
-    ids = list(c.keys())
-    embeddings = np.array(list(c.values()))
-    for i, (eps, min_samples) in enumerate(combinations):
-
-
-        dbscan_ = DBSCAN(eps=eps, min_samples=min_samples, metric="cosine").fit(embeddings)
-        labels = dbscan_.labels_
-        labels_set = set(labels)
-        num_clusters = len(labels_set)
-        if -1 in labels_set:
-            num_clusters -= 1
-        if num_clusters < 2:
-            scores.append(-10)
-            all_label_list.append('bad')
-            all_num_label.append(num_clusters)
-            continue
-        mask = labels != -1
-        score = score = silhouette_score(embeddings[mask], labels[mask], metric="cosine", random_state=42)
-        scores.append(score)
-        all_label_list.append(labels)
-        all_num_label.append(len(labels_set))
-        print(f"Score {scores[i]} , num of clusters {num_clusters}")
-
-    if max(scores) == -10:
-        raise RuntimeError("No valid clustering found for any parameter combination")
-    best_indx = np.argmax(scores)
-    best_params = combinations[best_indx]
-    best_score = scores[best_indx]
-    best_num_labels = all_num_label[best_indx]
-    dt.freeze_dbscan_configs(int(best_params[1]), float(best_params[0]), best_score, best_num_labels)
 
 """-------------------------------------------------------------Experiments-------------------------------------------------------------"""
 

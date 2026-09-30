@@ -20,13 +20,24 @@ import time
 import plotting as pt
 import tables
 import pandas as pd
+import sknetwork
 knn_metrics = ['cosine', 'euclidean', 'manhattan', 'chebyshev']
 k_means_algorithms = ['k-means++', 'random']
 rerankers = ['BM25', 'graph_aware', 'cross_encoder']
 
 result_file = "Outputs/"
 FILE_PPR = "2026-09-02_deep sensitivity experiment_38ffe2c1"
-FILE_K_STEPH = "2026-09-05_deep sensitivity experiment k steph_6596cad8"
+FILE_K_STEPH = "2026-09-15_deep sensitivity experiment k steph_640cf4a9"
+FILE_K_STEPH_BM25 = "2026-09-16_reranker experiment on k steph for BM25_bd31ed6e"
+FILE_SEED_SELECTION = "2026-08-27_ppr_seed_selection_study_12764e8e"
+FILE_NORM_SELECTION = "2026-08-26_ppr_score_calibration_study_e13e6e09"
+FILE_RANDOM_STATE_SELECTION = "2026-08-29_kmeans_random_state_selection_study_41fd8da1"
+FILE_PPR_GRAPH_CONSTRUCTION = "2026-09-13_deep sensitivity experiment for different params in the contruction of the graph graph_construction_9c229bdb"
+FILE_PPR_PREPROCESS = "2026-09-13_deep sensitivity experiment for different params in the contruction of the graph preprocess_1959e7da"
+FILE_PPR_GRAPH_METRIC = "2026-09-12_deep sensitivity experiment for different params in the contruction of the graph metric_f452199c"
+FILE_PPR_AGGLO = "2026-09-11_deep sensitivity experiment for agglo kmeans_ac4b41f4"
+FILE_PPR_TEST = "2026-09-18_Test set for ppr_024c2f6e"
+FILE_K_STEPH_TEST = "2026-09-18_test set for k-steph_652346d3"
 
 
 def make_name(prefix, varied, graph, clustering = None) :
@@ -82,8 +93,6 @@ def get_preprocess_graph_input():
     graph_params = {"Directed": DIRECTED, "Weighted": WEIGHTED}
     return preprocess, graph_params
 
-
-
 def get_knn_input():
     N_NEIGHBORS = int(input("n_neighbors (int): ").strip())
     METRIC = input("Metric (cosine/euclidean/manhattan/chebyshev): ").strip()
@@ -115,67 +124,6 @@ def get_kmeans_input():
     kmeans_combo = {"n_clusters": N_CLUSTERS, "init": INIT}
     return kmeans_combo
 
-def make_dev_test_splits():
-    """Function that makes the dev and test splits"""
-    # Make dev split
-    query, _, _ = dt.load_texts()
-    make_split(query, 0.02, "dev")
-    # Make test split
-    query, _ = dt.load_texts_tests()
-    make_split(query, 0.7, "test")
-
-def make_split(query, split_percentage, split_type):
-    """Making splits for a given set of queries. The splits are based on lengths and the three groups are
-       small, medium, large. After labeling all the query with the labels small, medium, long the splits are made
-       by taking ids randomly.
-    """
-    vectorizer = TfidfVectorizer()
-    analyzer = vectorizer.build_analyzer()
-    query_labels = {}
-    lengths = [len(analyzer(text)) for text in query.values()]
-    p33, p66 = np.percentile(lengths, [33, 66])
-
-    for qid, text in query.items():
-        # Labeling the queries to small, medium , long
-        query_length = len(analyzer(text))
-
-        if query_length <= p33:
-            label = "small"
-        elif query_length <= p66:
-            label = "medium"
-        else:
-            label = "long"
-
-        query_labels[qid] = label
-
-    # Determining each sample size
-    total_sample = int(len(query_labels) * split_percentage)
-    each_sample_size = total_sample // 3
-    # Randomly taking the ids for sample
-    rng = np.random.default_rng(42)
-    small_pool = [qid for qid, l in query_labels.items() if l == "small"]
-    medium_pool = [qid for qid, l in query_labels.items() if l == "medium"]
-    long_pool = [qid for qid, l in query_labels.items() if l == "long"]
-    small_queries = rng.choice(
-        small_pool,
-        size=min(each_sample_size, len(small_pool)),
-        replace=False
-    ).tolist()
-
-    medium_queries = rng.choice(
-        medium_pool,
-        size=min(each_sample_size, len(medium_pool)),
-        replace=False
-    ).tolist()
-
-    long_queries = rng.choice(
-        long_pool,
-        size=min(each_sample_size, len(long_pool)),
-        replace=False
-    ).tolist()
-
-    # Saving the samples
-    dt.save_split(small_queries, medium_queries, long_queries, f"Data/splits", split_type)
 
 
 
@@ -202,26 +150,27 @@ if __name__ == "__main__":
     elif MODE.lower() == "make embeddings":
         ex.prepare_dataset()
     elif MODE.lower() == "run experiments":
-        METHOD = input("baseline, prr calibration study, ppr seed selection study, k steph exhaustive,"
-                       " ppr exhaustive, ablation study preprocess, ablation study metric, ablation study graph construction, random state selection study, dbscan selection study: ").strip()
-        if METHOD.lower() == "baseline":
+        METHOD = input("baseline_dev, baseline_test,"
+                       "\n prr calibration study, ppr seed selection study, k steph exhaustive,\n"
+                       " ppr exhaustive, ablation study preprocess, ablation study metric,\n "
+                       "ablation study graph construction, random state selection study,\n"
+                       "reranker study bm25,\n"
+                       " test set ppr, test set k-steph: ").strip()
+        if METHOD.lower() == "baseline_dev":
             ex.run_baseline("dev")
+        elif METHOD.lower() == "baseline_test":
             ex.run_baseline("test")
         elif METHOD.lower() == "prr calibration study":
             ex.ppr_score_calibration_study()
         elif METHOD.lower() == "ppr seed selection study":
             ex.ppr_seed_selection_study()
-        elif METHOD.lower() == "dbscan selection study":
-            ex.dbscan_param_selection_study()
         elif METHOD.lower() == "ppr exhaustive":
             ex.run_retrieval_ppr_deep_sensitivity_experiment()
         elif METHOD.lower() == "k steph exhaustive":
             if FILE_PPR == "":
                 raise ValueError(f"Wrong ppr experiment {FILE_PPR}")
-            top_3 = dt.get_top_3_best_performing_graphs("PPR", "all_samples", FILE_PPR,
-                                                        "dev")
-            files = [entry["graph"] for entry in top_3]
-            ex.run_retrieval_k_steph("graph_aware", files)
+            top_2 = dt.get_top_2_graph_families("PPR", "all_samples", FILE_PPR, "dev")
+            ex.run_retrieval_k_steph("graph_aware", top_2)
         elif METHOD.lower() == "random state selection study":
             ex.k_means_random_state_study()
         elif METHOD.lower() == "ablation study preprocess":
@@ -230,9 +179,16 @@ if __name__ == "__main__":
             ex.ablation_study("metric")
         elif METHOD.lower() == "ablation study graph construction":
             ex.ablation_study("graph_construction")
-
+        elif METHOD.lower() == "reranker study bm25":
+            top_3_graphs = dt.get_top_3_best_performing_graphs("k-steph", "all_samples", FILE_K_STEPH, "dev")
+            top_3_graph_names = [graph["graph"] for graph in top_3_graphs]
+            ex.reranker_study("BM25", top_3_graph_names)
+        elif METHOD.lower() == "test set ppr":
+            ex.run_ppr_on_test_set()
+        elif METHOD.lower() == "test set k-steph":
+            ex.run_k_steph_on_test_set()
     elif MODE.lower() == "make query samples":
-        make_dev_test_splits()
+        dt.make_dev_test_splits()
     elif MODE.lower() == "graph performance":
         GRAPH_NAME = input("Graph name: ").strip()
         dt.graph_perf(GRAPH_NAME)
@@ -258,7 +214,7 @@ if __name__ == "__main__":
             name = make_name(f"threshold_{pre_tag}", threshold_params, graph_params)
             gc.build_threshold_graph(c, threshold_params, preprocess, name, graph_params, True)
         elif METHOD.lower() == "clustering":
-            GRAPH_ALGO = input("Choose algorithm, Kmeans/Dbscan: ").strip()
+            GRAPH_ALGO = input("Choose algorithm, Kmeans: ").strip()
             if GRAPH_ALGO.lower() == "kmeans":
                 kmeans_combo = get_kmeans_input()
                 kmeans_params = gc.merge(gc.BASE_KMEANS, kmeans_combo)
@@ -267,22 +223,10 @@ if __name__ == "__main__":
                 knn_params = gc.merge(gc.BASE_KNN, knn_combo)
                 name = make_name(f"knn_kmeans_{pre_tag}", knn_combo, graph_params, kmeans_combo)
 
-                clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params, agglo_params={}, dbscan_params={},  preprocess= preprocess)
+                clustering_results = cl.perform_clustering(data=c, algorithm="kmeans", kmeans_params=kmeans_params, agglo_params={},  preprocess=preprocess)
                 gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans", True)
                 #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "kmeans",True)
 
-            elif GRAPH_ALGO.lower() == "dbscan":
-                dbscan_combo = get_dbscan_input()
-                dbscan_params = gc.merge(gc.BASE_DBSCAN, dbscan_combo)
-                knn_combo = get_knn_input()
-                knn_params = gc.merge(gc.BASE_KNN, knn_combo)
-
-                pre_tag = f"sc{preprocess['scaler']}_pca{preprocess['pca']}"
-                name = make_name(f"knn_dbscan_{pre_tag}", knn_combo, graph_params, dbscan_combo)
-                clustering_results = cl.perform_clustering(data=c, algorithm="dbscan", kmeans_params={}, agglo_params={}, dbscan_params=dbscan_params,  preprocess= preprocess)
-                gc.build_clustering_knn_graph(clustering_results, knn_params, graph_params, preprocess, name, False, "dbscan", True)
-                #gc.build_clustering_mutual_knn_graph(clustering_results, knn_params, graph_params, preprocess, name,
-                #                                  False, "dbscan")
             else:
                 raise ValueError(f"Wrong graph construction method: {GRAPH_ALGO}")
     else:
