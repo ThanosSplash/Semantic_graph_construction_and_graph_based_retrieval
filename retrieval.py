@@ -1,19 +1,14 @@
 from sknetwork.ranking import PageRank
 import data_loading as dt
-from scipy.sparse import csr_matrix
 import networkx as nx
 from scipy.sparse import csr_matrix
-from queue import PriorityQueue
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler, FunctionTransformer, StandardScaler
 from sklearn.pipeline import make_pipeline
 import numpy as np
 from sentence_transformers import CrossEncoder
-from collections import defaultdict
 from rank_bm25 import BM25Okapi
-import transformers
 import torch
-import time
 
 DAMPING_FACTOR = 0.85
 

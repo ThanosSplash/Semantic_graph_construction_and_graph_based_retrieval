@@ -1,19 +1,9 @@
 import networkx as nx
-from itertools import combinations
 import numpy as np
 import data_loading as dt
 from sklearn.metrics.pairwise import cosine_similarity
-import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import AgglomerativeClustering, KMeans
-from sklearn.decomposition import PCA
-from sklearn.cluster import DBSCAN
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 import clustering as cl
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
-from datetime import datetime
-import uuid
 import itertools
 from copy import deepcopy
 
@@ -350,12 +340,6 @@ threshold_grid = {
 
 }
 
-dbscan_grid = {
-    "eps":         [0.4827586206896552],
-    "min_samples": [22],
-    "metric": ["cosine"]
-}
-
 agglo_grid = {
     "n_clusters": [3],
     "distance_threshold_on_agglo": [30],
@@ -378,10 +362,6 @@ BASE_KMEANS = {
 BASE_KNN = {
     "radius": 1.0, "algorithm": "auto", "leaf_size": 30,
     "p": 2, "metric_params": None, "n_jobs": None,
-}
-BASE_DBSCAN = {
-    "metric_params": None,
-    "algorithm": "auto", "leaf_size": 30, "p": None, "n_jobs": None,
 }
 BASE_AGGLO = {
     "metric": "euclidean", "compute_full_tree": "auto", "connectivity": None,

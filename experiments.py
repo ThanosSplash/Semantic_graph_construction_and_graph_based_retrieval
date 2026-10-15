@@ -1,30 +1,13 @@
-import numpy as np
-
 import embeddings as emb
 import data_loading as dt
-import graph_construction as gc
 import retrieval as rt
-from sklearn.cluster import AgglomerativeClustering, KMeans
-import random
-from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import cosine_similarity
-from queue import PriorityQueue
-from sklearn.metrics import precision_score, recall_score
 import evaluation as ev
-import clustering
-import pandas as pd
-import itertools
-from copy import deepcopy
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
-from sklearn.decomposition import PCA
 import time
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
 import tables
 import plotting as pt
-import clustering as cl
-from sklearn.metrics import silhouette_samples, silhouette_score
-from sklearn.cluster import DBSCAN
+
 seed_selection_method = "cosine"
 normalization = "Min_Max"
 random_state = 42
@@ -318,11 +301,6 @@ def run_retrieval_ppr_deep_sensitivity_experiment():
 
     tables.make_ppr_tables(run_id, "dev")
 
-    dt.freeze_ppr_configs(run_id, "small", "dev")
-    dt.freeze_ppr_configs(run_id, "long", "dev")
-    dt.freeze_ppr_configs(run_id, "medium", "dev")
-    dt.freeze_ppr_configs(run_id, "all_samples", "dev")
-
     metrics = ["recall", "mrr", "ndcg", "map"]
     sample_types = ["small", "medium", "long", "all_samples"]
     pt.make_spearmanr_plots(run_id)
@@ -493,13 +471,7 @@ def run_retrieval_k_steph(reranker, files=None):
                         rearrange_results_and_save_for_all_samples("k-steph", eval_scores, save_dir, params, query_type,
                                                                    total_latency)
 
-
     tables.make_k_steph_tables(run_id, query_type)
-
-    dt.freeze_k_steph_configs(run_id, "small", "dev")
-    dt.freeze_k_steph_configs(run_id, "long", "dev")
-    dt.freeze_k_steph_configs(run_id, "medium", "dev")
-    dt.freeze_k_steph_configs(run_id, "all_samples", "dev")
 
     metrics = ["recall", "mrr", "ndcg", "map"]
     sample_types = ["small", "medium", "long", "all_samples"]
@@ -753,25 +725,27 @@ def run_baseline(query_type):
 
     k_retrive = [5, 10, 20]
     metrics = ["recall", "rr", "ndcg", "avg_precisions"]
+    seed_selections = ["cosine"]
     dt.sanity_check(small + medium + long, "Outputs/Baseline-RAG", query_type)
     dt.clean_baseline(query_type)
 
     for k in k_retrive:
-        eval_scores = None
-        total_latency = 0
-        params = None
-        for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
-            scores, p, predictions_per_query, relevant_passage_ids_per_query, latency = baseline_search(dataset, k,
-                                                                                                  "Outputs/Baseline-RAG",
-                                                                                                  name, query_type)
-            total_latency += latency
-            if eval_scores is None:
-                eval_scores, params = scores, p
-            else:
-                for m in metrics:
-                    eval_scores[m] += scores[m]
-        params["sample_type"] = "all_samples"
-        rearrange_results_and_save_for_all_samples("Baseline", eval_scores, "Outputs/Baseline-RAG", params, query_type, total_latency)
+        for seed_selection in seed_selections:
+            eval_scores = None
+            total_latency = 0
+            params = None
+            for name, dataset in [("small", small), ("medium", medium), ("long", long)]:
+                scores, p, predictions_per_query, relevant_passage_ids_per_query, latency = baseline_search(dataset, k,
+                                                                                                      "Outputs/Baseline-RAG",
+                                                                                                      name, query_type, seed_selection)
+                total_latency += latency
+                if eval_scores is None:
+                    eval_scores, params = scores, p
+                else:
+                    for m in metrics:
+                        eval_scores[m] += scores[m]
+            params["sample_type"] = "all_samples"
+            rearrange_results_and_save_for_all_samples("Baseline", eval_scores, "Outputs/Baseline-RAG", params, query_type, total_latency)
 
 def ppr_score_calibration_study():
     small, medium, long = dt.load_splits_dev()

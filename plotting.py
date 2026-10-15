@@ -9,7 +9,7 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 import retrieval as rt
 import graph_construction as gc
-import nx_parallel
+
 import igraph as ig
 from collections import defaultdict
 from scipy import stats
@@ -239,7 +239,7 @@ def make_plot_performance_of_different_graph_types(eval_metric, method, sample_t
     plt.xlabel("Graph Types")
     plt.ylabel(eval_metric)
     plt.bar(x, y)
-    plt.savefig(f'Outputs/runs/{file}/plots/{eval_metric}_vs_graph_types_{sample_type}_{method}_{query_type}.png',
+    plt.savefig(f'Outputs/runs/{file}/plots/{eval_metric}_vs_graph_types_{sample_type}_{method}_{query_type}_{on_avg}.png',
                 dpi=300, bbox_inches='tight')
 
 
@@ -267,12 +267,13 @@ def forest_plot(data, sample_type, method, query_type, file):
                     dpi=300, bbox_inches='tight')
 
 
-def make_spearmanr_plots(file):
-    correlations = dt.get_spearmanr_freeze()
+def make_spearmanr_plots(file, query_type):
+
+    correlations = dt.get_spearmanr_freeze(file)
     for name, stats in correlations:
         if stats["significant"] == "not significant":
             continue
-        make_plot_for_eval_metric_and_graph_stat(stats["metric"], stats["graph_stat"], "PPR", "all_samples", "dev", file)
+        make_plot_for_eval_metric_and_graph_stat(stats["metric"], stats["graph_stat"], "PPR", "all_samples", query_type, file)
 
 
 def plot_dendrogram(data, method):

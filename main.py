@@ -1,26 +1,13 @@
-import plotting
-
 import experiments as ex
 import data_loading as dt
-import retrieval as rt
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
-import plotting as pt
-import graph_construction as gc
-import evaluation as ev
-from datetime import datetime
-import uuid
-import itertools
-from copy import deepcopy
-import numpy as np
 import clustering as cl
 import graph_construction as gc
-from sklearn.feature_extraction.text import TfidfVectorizer
-import time
-import plotting as pt
+from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version
 import tables
-import pandas as pd
-import sknetwork
+
 knn_metrics = ['cosine', 'euclidean', 'manhattan', 'chebyshev']
 k_means_algorithms = ['k-means++', 'random']
 rerankers = ['BM25', 'graph_aware', 'cross_encoder']
@@ -33,11 +20,11 @@ FILE_SEED_SELECTION = "2026-08-27_ppr_seed_selection_study_12764e8e"
 FILE_NORM_SELECTION = "2026-08-26_ppr_score_calibration_study_e13e6e09"
 FILE_RANDOM_STATE_SELECTION = "2026-08-29_kmeans_random_state_selection_study_41fd8da1"
 FILE_PPR_GRAPH_CONSTRUCTION = "2026-09-13_deep sensitivity experiment for different params in the contruction of the graph graph_construction_9c229bdb"
-FILE_PPR_PREPROCESS = "2026-09-13_deep sensitivity experiment for different params in the contruction of the graph preprocess_1959e7da"
+FILE_PPR_PREPROCESS = "2026-10-10_deep sensitivity experiment for different params in the contruction of the graph preprocess_5e8baee8"
 FILE_PPR_GRAPH_METRIC = "2026-09-12_deep sensitivity experiment for different params in the contruction of the graph metric_f452199c"
 FILE_PPR_AGGLO = "2026-09-11_deep sensitivity experiment for agglo kmeans_ac4b41f4"
-FILE_PPR_TEST = "2026-09-18_Test set for ppr_024c2f6e"
-FILE_K_STEPH_TEST = "2026-09-18_test set for k-steph_652346d3"
+FILE_PPR_TEST = "2026-10-09_Test set for ppr_12225a1a"
+FILE_K_STEPH_TEST = "2026-10-09_test set for k-steph_99e2893a"
 
 
 def make_name(prefix, varied, graph, clustering = None) :
@@ -124,11 +111,33 @@ def get_kmeans_input():
     kmeans_combo = {"n_clusters": N_CLUSTERS, "init": INIT}
     return kmeans_combo
 
+def print_lib_versions():
+    packages = [
+        "scikit-network",
+        "numpy",
+        "sentence-transformers",
+        "rank-bm25",
+        "networkx",
+        "scikit-learn",
+        "matplotlib",
+        "igraph",
+        "scipy",
+        "statsmodels",
+        "pandas",
+        "python"
 
+    ]
+
+    for pkg in packages:
+        try:
+            print(f"{pkg}: {version(pkg)}")
+        except PackageNotFoundError:
+            print(f"{pkg}: not installed")
 
 
 if __name__ == "__main__":
-
+    import sys
+    print(sys.version)
     MODE = str(input("Choose Mode, Make graphs, Make a test graph, Run experiments, Make embeddings Graph performance "
                      "make query samples: "))
 

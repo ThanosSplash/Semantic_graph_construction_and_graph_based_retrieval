@@ -1,4 +1,3 @@
-import os
 import json
 from collections import defaultdict
 from scipy.stats import spearmanr
@@ -598,10 +597,10 @@ def make_norm_not_norm_table(file):
             [e for e in raw_entries if e['alpha'] == 0.0]
     )
 
-    min_max_entries = sorted(min_max_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
-    z_score_entries = sorted(z_score_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
-    log_min_max_entries = sorted(log_min_max_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
-    raw_entries = sorted(raw_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
+    min_max_entries = sorted(min_max_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
+    z_score_entries = sorted(z_score_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
+    log_min_max_entries = sorted(log_min_max_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
+    raw_entries = sorted(raw_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
 
     min_max_entries = [e for e in min_max_entries if e['alpha'] not in (0.0, 1.0)]
     z_score_entries = [e for e in z_score_entries if e['alpha'] not in (0.0, 1.0)]
@@ -638,9 +637,9 @@ def make_seed_selection_table(file):
             elif flat_entry['seed_selection'] == "fusion":
                 fusion_entries.append(flat_entry)
 
-    cosine_entries = sorted(cosine_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
-    bm25_entries = sorted(bm25_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
-    fusion_entries = sorted(fusion_entries, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
+    cosine_entries = sorted(cosine_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
+    bm25_entries = sorted(bm25_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
+    fusion_entries = sorted(fusion_entries, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
     avgs = {}
     avgs["cosine"] = (np.mean([e['ndcg'] for e in cosine_entries]), np.std([e['ndcg'] for e in cosine_entries]))
     avgs["bm25"] = (np.mean([e['ndcg'] for e in bm25_entries]), np.std([e['ndcg'] for e in bm25_entries]))
@@ -778,6 +777,9 @@ def make_spearmanr_table(file, method, sample_type, query_type):
 
      # Sorting and saving
      sorted_correlations = sorted(correlations.items(), key=lambda x: (x[1]["rho"], -x[1]["p_value"]))
+     with open(f"Outputs/runs/{file}/tables/spearmanr_freeze.pkl", "wb") as f:
+            pickle.dump(sorted_correlations, f)
+
      with open(f"Outputs/runs/{file}/tables/spearmanr_correlations.txt", "w") as f:
          f.write(f"Spearman correlations, n={len(best_perf_graph)} graphs, "
                  f"{len(pvals)} tests, Benjamini-Hochberg FDR correction (alpha={alpha})\n")
@@ -797,6 +799,14 @@ def make_ppr_tables(file, query_type):
     make_graph_construction_sensitivity_table(file)
     make_spearmanr_table(file, "PPR", "all_samples", query_type)
     make_paired_bootstrap_table(file, "PPR", "all_samples", query_type)
+    metrics = ["recall", "mrr", "ndcg", "map"]
+    sample_types = ["small", "medium", "long", "all_samples"]
+    if query_type == "dev":
+        pt.make_spearmanr_plots(file, query_type)
+        for metric in metrics:
+            for sample_type in sample_types:
+                pt.make_plot_performance_of_different_graph_types(metric, "PPR", sample_type, query_type, True,
+                                                                  file)
 def make_k_steph_tables(file, query_type):
     dt.seperate_results(file, query_type)
     make_query_table(file, query_type, "all")
@@ -808,3 +818,11 @@ def make_k_steph_tables(file, query_type):
     make_hop_sensitivity_table(file)
     make_graph_construction_sensitivity_table(file)
     make_paired_bootstrap_table(file, "k-steph", "all_samples", query_type)
+
+    metrics = ["recall", "mrr", "ndcg", "map"]
+    sample_types = ["small", "medium", "long", "all_samples"]
+    if query_type == "dev":
+        for metric in metrics:
+            for sample_type in sample_types:
+                pt.make_plot_performance_of_different_graph_types(metric, "k-steph", sample_type, query_type, True,
+                                                                  file)

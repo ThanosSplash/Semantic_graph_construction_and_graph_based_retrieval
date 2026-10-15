@@ -1,20 +1,15 @@
 import json
-
 import pandas as pd
 import pickle
 import networkx as nx
 import os
-import pyarrow
 import numpy as np
 import plotting
-from sklearn.metrics.pairwise import cosine_similarity
-from tqdm import tqdm
 import copy
 import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-import tables
 import uuid
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -198,7 +193,7 @@ def make_dev_test_splits():
     make_split(query, 0.02, "dev")
     # Make test split
     query, _ = load_texts_tests()
-    make_split(query, 0.7, "test")
+    make_split(query, 1.0, "test")
 
 def make_split(query, split_percentage, split_type):
     """Making splits for a given set of queries. The splits are based on lengths and the three groups are
@@ -319,7 +314,7 @@ def get_top_3_best_performing_graphs(method, sample_type, file, query_type):
         }
         graphs_perf.append(flat_entry)
 
-    top_3_graphs = sorted(graphs_perf, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)[:3]
+    top_3_graphs = sorted(graphs_perf, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)[:3]
     return top_3_graphs
 def get_top_3_best_performing_graphs_for_alpha(method, sample_type, file, query_type, alpha):
     # For a given method and sample type return the top best performing graphs
@@ -349,7 +344,7 @@ def get_top_3_best_performing_graphs_for_alpha(method, sample_type, file, query_
         }
         graphs_perf.append(flat_entry)
 
-    top_3_graphs = sorted(graphs_perf, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)[:3]
+    top_3_graphs = sorted(graphs_perf, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)[:3]
     return top_3_graphs
 def get_each_graph_best_perf(method, sample_type, file, query_type):
     # For a given method and sample type return the top best performing graphs
@@ -368,7 +363,7 @@ def get_each_graph_best_perf(method, sample_type, file, query_type):
         }
         graphs_perf.append(flat_entry)
 
-    graphs_best_perf = sorted(graphs_perf, key=lambda x: (x["ndcg"], x["recall"], x["mrr"], -x["latency"]), reverse=True)
+    graphs_best_perf = sorted(graphs_perf, key=lambda x: (x["weighted_score"], -x["latency"]), reverse=True)
     return graphs_best_perf
 
 def get_query_metrics_for_a_graph(file, graph, query_type):
@@ -746,4 +741,6 @@ def extract_best_run_and_compare_to_baseline(queries, baseline_queries, best_par
 """-----------------------------------------------------------------------------For query table------------------------------------------------------------------------------------------------------------------------------"""
 
 
-
+def get_spearmanr_freeze(file):
+    with open(f"Outputs/runs/{file}/tables/spearmanr_freeze.pkl", "rb") as f:
+        return pickle.load(f)

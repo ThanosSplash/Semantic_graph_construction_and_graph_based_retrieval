@@ -1,15 +1,7 @@
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from scipy.cluster.hierarchy import dendrogram as scipy_dendrogram  # explicit import
-
-from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.cluster import AgglomerativeClustering, KMeans
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
-from sklearn.pipeline import Pipeline
-
-import clustering
 import plotting
 
 def compute_sse(data, k_range):
